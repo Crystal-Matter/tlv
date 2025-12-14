@@ -44,15 +44,15 @@ module TLV
                 {% has_default = ivar.has_default_value? %}
 
                 {% # Determine the lookup key for the structure hash
-                   lookup_key = if tag.is_a?(NumberLiteral)
-                                  "#{tag}_u8".id
-                                elsif tag.is_a?(TupleLiteral) && tag.size == 2
-                                  "{#{tag[0]}_u16, #{tag[1]}_u16}".id
-                                elsif tag.is_a?(TupleLiteral) && tag.size == 3
-                                  "{#{tag[0]}_u16, #{tag[1]}_u16, #{tag[2]}_u16}".id
-                                else
-                                  raise "Invalid tag format: #{tag}"
-                                end %}
+ lookup_key = if tag.is_a?(NumberLiteral)
+                "#{tag}_u8".id
+              elsif tag.is_a?(TupleLiteral) && tag.size == 2
+                "{#{tag[0]}_u16, #{tag[1]}_u16}".id
+              elsif tag.is_a?(TupleLiteral) && tag.size == 3
+                "{#{tag[0]}_u16, #{tag[1]}_u16, #{tag[2]}_u16}".id
+              else
+                raise "Invalid tag format: #{tag}"
+              end %}
 
                 %found{ivar.name} = %structure[{{ lookup_key }}]?
 
@@ -93,13 +93,13 @@ module TLV
                 {% optional = ann[:optional] != false && ivar.type.nilable? %}
 
                 {% # Determine the tag format (used for both hash key and TLV::Any tag)
-                   if tag.is_a?(NumberLiteral)
-                     tag_value = "#{tag}_u8".id
-                   elsif tag.is_a?(TupleLiteral) && tag.size == 2
-                     tag_value = "{#{tag[0]}_u16, #{tag[1]}_u16}".id
-                   elsif tag.is_a?(TupleLiteral) && tag.size == 3
-                     tag_value = "{#{tag[0]}_u16, #{tag[1]}_u16, #{tag[2]}_u16}".id
-                   end %}
+ if tag.is_a?(NumberLiteral)
+   tag_value = "#{tag}_u8".id
+ elsif tag.is_a?(TupleLiteral) && tag.size == 2
+   tag_value = "{#{tag[0]}_u16, #{tag[1]}_u16}".id
+ elsif tag.is_a?(TupleLiteral) && tag.size == 3
+   tag_value = "{#{tag[0]}_u16, #{tag[1]}_u16, #{tag[2]}_u16}".id
+ end %}
 
                 %value{ivar.name} = @{{ ivar.name }}
 

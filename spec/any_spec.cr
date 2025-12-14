@@ -162,9 +162,9 @@ describe TLV::Any do
     it "parses structure with single field" do
       # Structure with Tag 1 = 42 (UInt8)
       bytes = Bytes[
-        0x15,       # Structure start
+        0x15,             # Structure start
         0x24, 0x01, 0x2A, # Tag 1, UInt8 42
-        0x18,       # Structure end
+        0x18,             # Structure end
       ]
       any = TLV::Any.from_slice(bytes)
 
@@ -176,10 +176,10 @@ describe TLV::Any do
     it "parses structure with multiple fields" do
       # Structure with Tag 1 = 65521 (UInt16), Tag 2 = 32769 (UInt16)
       bytes = Bytes[
-        0x15,             # Structure start
+        0x15,                   # Structure start
         0x25, 0x01, 0xF1, 0xFF, # Tag 1, UInt16 65521
         0x25, 0x02, 0x01, 0x80, # Tag 2, UInt16 32769
-        0x18,             # Structure end
+        0x18,                   # Structure end
       ]
       any = TLV::Any.from_slice(bytes)
 
@@ -192,9 +192,9 @@ describe TLV::Any do
     it "parses structure with string field" do
       # Structure with Tag 3 = "Light"
       bytes = Bytes[
-        0x15,                               # Structure start
+        0x15,                                           # Structure start
         0x2C, 0x03, 0x05, 0x4C, 0x69, 0x67, 0x68, 0x74, # Tag 3, String "Light"
-        0x18,                               # Structure end
+        0x18,                                           # Structure end
       ]
       any = TLV::Any.from_slice(bytes)
 
@@ -205,11 +205,11 @@ describe TLV::Any do
     it "parses nested structure" do
       # Outer structure with Tag 1 = inner structure containing Tag 1 = 42
       bytes = Bytes[
-        0x15,       # Outer structure start
-        0x35, 0x01, # Tag 1 = structure start
+        0x15,             # Outer structure start
+        0x35, 0x01,       # Tag 1 = structure start
         0x24, 0x01, 0x2A, # Tag 1, UInt8 42
-        0x18,       # Inner structure end
-        0x18,       # Outer structure end
+        0x18,             # Inner structure end
+        0x18,             # Outer structure end
       ]
       any = TLV::Any.from_slice(bytes)
 
@@ -283,11 +283,11 @@ describe TLV::Any do
     it "parses list with mixed types" do
       # List ["hello", 42, true]
       bytes = Bytes[
-        0x17,                               # List start
+        0x17,                                     # List start
         0x0C, 0x05, 0x68, 0x65, 0x6C, 0x6C, 0x6F, # Anonymous string "hello"
-        0x04, 0x2A,                         # Anonymous UInt8: 42
-        0x09,                               # Anonymous true
-        0x18,                               # List end
+        0x04, 0x2A,                               # Anonymous UInt8: 42
+        0x09,                                     # Anonymous true
+        0x18,                                     # List end
       ]
       any = TLV::Any.from_slice(bytes)
 

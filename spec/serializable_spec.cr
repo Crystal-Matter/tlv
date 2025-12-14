@@ -157,10 +157,10 @@ describe TLV::Serializable do
   describe "basic serialization" do
     it "serializes and deserializes a simple class" do
       bytes = Bytes[
-        0x15,                               # Structure start
+        0x15,                                     # Structure start
         0x2C, 0x01, 0x04, 0x4A, 0x6F, 0x68, 0x6E, # Tag 1, String "John"
-        0x2C, 0x02, 0x03, 0x44, 0x6F, 0x65, # Tag 2, String "Doe"
-        0x18,                               # Structure end
+        0x2C, 0x02, 0x03, 0x44, 0x6F, 0x65,       # Tag 2, String "Doe"
+        0x18,                                     # Structure end
       ]
 
       user = SimpleUser.from_slice(bytes)
@@ -170,10 +170,10 @@ describe TLV::Serializable do
 
     it "serializes and deserializes a struct" do
       bytes = Bytes[
-        0x15,                   # Structure start
+        0x15,                               # Structure start
         0x26, 0x01, 0x78, 0x56, 0x34, 0x12, # Tag 1, UInt32 0x12345678
-        0x25, 0x02, 0x39, 0x30, # Tag 2, UInt16 0x3039 (12345)
-        0x18,                   # Structure end
+        0x25, 0x02, 0x39, 0x30,             # Tag 2, UInt16 0x3039 (12345)
+        0x18,                               # Structure end
       ]
 
       packet = SimplePacket.from_slice(bytes)
@@ -183,11 +183,11 @@ describe TLV::Serializable do
 
     it "round-trips DeviceInfo" do
       bytes = Bytes[
-        0x15,                                     # Structure start
-        0x25, 0x01, 0xF1, 0xFF,                   # Tag 1, UInt16 65521
-        0x25, 0x02, 0x01, 0x80,                   # Tag 2, UInt16 32769
+        0x15,                                           # Structure start
+        0x25, 0x01, 0xF1, 0xFF,                         # Tag 1, UInt16 65521
+        0x25, 0x02, 0x01, 0x80,                         # Tag 2, UInt16 32769
         0x2C, 0x03, 0x05, 0x4C, 0x69, 0x67, 0x68, 0x74, # Tag 3, String "Light"
-        0x18,                                     # Structure end
+        0x18,                                           # Structure end
       ]
 
       device = DeviceInfo.from_slice(bytes)
@@ -207,9 +207,9 @@ describe TLV::Serializable do
   describe "optional fields" do
     it "handles missing optional field" do
       bytes = Bytes[
-        0x15,                   # Structure start
+        0x15,                               # Structure start
         0x26, 0x01, 0x2A, 0x00, 0x00, 0x00, # Tag 1, UInt32 42
-        0x18,                   # Structure end
+        0x18,                               # Structure end
       ]
 
       obj = WithOptional.from_slice(bytes)
@@ -219,10 +219,10 @@ describe TLV::Serializable do
 
     it "handles present optional field" do
       bytes = Bytes[
-        0x15,                         # Structure start
-        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00, # Tag 1, UInt32 42
+        0x15,                                           # Structure start
+        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00,             # Tag 1, UInt32 42
         0x2C, 0x02, 0x05, 0x48, 0x65, 0x6C, 0x6C, 0x6F, # Tag 2, String "Hello"
-        0x18,                         # Structure end
+        0x18,                                           # Structure end
       ]
 
       obj = WithOptional.from_slice(bytes)
@@ -232,9 +232,9 @@ describe TLV::Serializable do
 
     it "omits nil optional field in serialization" do
       bytes = Bytes[
-        0x15,                   # Structure start
+        0x15,                               # Structure start
         0x26, 0x01, 0x2A, 0x00, 0x00, 0x00, # Tag 1, UInt32 42
-        0x18,                   # Structure end
+        0x18,                               # Structure end
       ]
 
       obj = WithOptional.from_slice(bytes)
@@ -247,9 +247,9 @@ describe TLV::Serializable do
   describe "default values" do
     it "uses default when field is missing" do
       bytes = Bytes[
-        0x15,                         # Structure start
+        0x15,                                     # Structure start
         0x2C, 0x01, 0x04, 0x54, 0x65, 0x73, 0x74, # Tag 1, String "Test"
-        0x18,                         # Structure end
+        0x18,                                     # Structure end
       ]
 
       obj = WithDefault.from_slice(bytes)
@@ -259,10 +259,10 @@ describe TLV::Serializable do
 
     it "uses provided value when field is present" do
       bytes = Bytes[
-        0x15,                         # Structure start
+        0x15,                                     # Structure start
         0x2C, 0x01, 0x04, 0x54, 0x65, 0x73, 0x74, # Tag 1, String "Test"
-        0x26, 0x02, 0x14, 0x00, 0x00, 0x00, # Tag 2, UInt32 20
-        0x18,                         # Structure end
+        0x26, 0x02, 0x14, 0x00, 0x00, 0x00,       # Tag 2, UInt32 20
+        0x18,                                     # Structure end
       ]
 
       obj = WithDefault.from_slice(bytes)
@@ -338,9 +338,9 @@ describe TLV::Serializable do
   describe "bytes" do
     it "handles byte fields" do
       bytes = Bytes[
-        0x15,                         # Structure start
+        0x15,                                     # Structure start
         0x30, 0x01, 0x04, 0xDE, 0xAD, 0xBE, 0xEF, # Tag 1, Bytes
-        0x18,                         # Structure end
+        0x18,                                     # Structure end
       ]
 
       obj = WithBytes.from_slice(bytes)
@@ -349,9 +349,9 @@ describe TLV::Serializable do
 
     it "round-trips bytes" do
       bytes = Bytes[
-        0x15,                         # Structure start
+        0x15,                                     # Structure start
         0x30, 0x01, 0x04, 0x01, 0x02, 0x03, 0x04, # Tag 1, Bytes
-        0x18,                         # Structure end
+        0x18,                                     # Structure end
       ]
 
       obj = WithBytes.from_slice(bytes)
@@ -364,13 +364,13 @@ describe TLV::Serializable do
   describe "nested structures" do
     it "deserializes nested serializable types" do
       bytes = Bytes[
-        0x15,       # Outer structure start
-        0x35, 0x01, # Tag 1 = structure start (user)
-        0x2C, 0x01, 0x04, 0x4A, 0x61, 0x6E, 0x65, # Tag 1, String "Jane"
+        0x15,                                           # Outer structure start
+        0x35, 0x01,                                     # Tag 1 = structure start (user)
+        0x2C, 0x01, 0x04, 0x4A, 0x61, 0x6E, 0x65,       # Tag 1, String "Jane"
         0x2C, 0x02, 0x05, 0x53, 0x6D, 0x69, 0x74, 0x68, # Tag 2, String "Smith"
-        0x18,       # Inner structure end
-        0x26, 0x02, 0x64, 0x00, 0x00, 0x00, # Tag 2, UInt32 100
-        0x18,       # Outer structure end
+        0x18,                                           # Inner structure end
+        0x26, 0x02, 0x64, 0x00, 0x00, 0x00,             # Tag 2, UInt32 100
+        0x18,                                           # Outer structure end
       ]
 
       obj = NestedOuter.from_slice(bytes)
@@ -381,13 +381,13 @@ describe TLV::Serializable do
 
     it "round-trips nested structures" do
       bytes = Bytes[
-        0x15,       # Outer structure start
-        0x35, 0x01, # Tag 1 = structure start (user)
-        0x2C, 0x01, 0x03, 0x42, 0x6F, 0x62, # Tag 1, String "Bob"
+        0x15,                                           # Outer structure start
+        0x35, 0x01,                                     # Tag 1 = structure start (user)
+        0x2C, 0x01, 0x03, 0x42, 0x6F, 0x62,             # Tag 1, String "Bob"
         0x2C, 0x02, 0x05, 0x4A, 0x6F, 0x6E, 0x65, 0x73, # Tag 2, String "Jones"
-        0x18,       # Inner structure end
-        0x26, 0x02, 0xC8, 0x00, 0x00, 0x00, # Tag 2, UInt32 200
-        0x18,       # Outer structure end
+        0x18,                                           # Inner structure end
+        0x26, 0x02, 0xC8, 0x00, 0x00, 0x00,             # Tag 2, UInt32 200
+        0x18,                                           # Outer structure end
       ]
 
       obj = NestedOuter.from_slice(bytes)
@@ -403,19 +403,19 @@ describe TLV::Serializable do
     it "handles float32 and float64" do
       # Build manually since float bytes are tricky
       io = IO::Memory.new
-      io.write_bytes(0x15_u8, IO::ByteFormat::LittleEndian)  # Structure start
+      io.write_bytes(0x15_u8, IO::ByteFormat::LittleEndian) # Structure start
 
       # Float32 tag 1
-      io.write_bytes(0x2A_u8, IO::ByteFormat::LittleEndian)  # Context tag + Float32
-      io.write_bytes(0x01_u8, IO::ByteFormat::LittleEndian)  # Tag 1
+      io.write_bytes(0x2A_u8, IO::ByteFormat::LittleEndian) # Context tag + Float32
+      io.write_bytes(0x01_u8, IO::ByteFormat::LittleEndian) # Tag 1
       io.write_bytes(3.14_f32, IO::ByteFormat::LittleEndian)
 
       # Float64 tag 2
-      io.write_bytes(0x2B_u8, IO::ByteFormat::LittleEndian)  # Context tag + Float64
-      io.write_bytes(0x02_u8, IO::ByteFormat::LittleEndian)  # Tag 2
+      io.write_bytes(0x2B_u8, IO::ByteFormat::LittleEndian) # Context tag + Float64
+      io.write_bytes(0x02_u8, IO::ByteFormat::LittleEndian) # Tag 2
       io.write_bytes(2.71828_f64, IO::ByteFormat::LittleEndian)
 
-      io.write_bytes(0x18_u8, IO::ByteFormat::LittleEndian)  # Structure end
+      io.write_bytes(0x18_u8, IO::ByteFormat::LittleEndian) # Structure end
 
       obj = WithFloats.from_slice(io.to_slice)
       obj.float32_val.should be_close(3.14_f32, 0.001)
@@ -424,19 +424,19 @@ describe TLV::Serializable do
 
     it "round-trips floats" do
       io = IO::Memory.new
-      io.write_bytes(0x15_u8, IO::ByteFormat::LittleEndian)  # Structure start
+      io.write_bytes(0x15_u8, IO::ByteFormat::LittleEndian) # Structure start
 
       # Float32 tag 1
-      io.write_bytes(0x2A_u8, IO::ByteFormat::LittleEndian)  # Context tag + Float32
-      io.write_bytes(0x01_u8, IO::ByteFormat::LittleEndian)  # Tag 1
+      io.write_bytes(0x2A_u8, IO::ByteFormat::LittleEndian) # Context tag + Float32
+      io.write_bytes(0x01_u8, IO::ByteFormat::LittleEndian) # Tag 1
       io.write_bytes(1.5_f32, IO::ByteFormat::LittleEndian)
 
       # Float64 tag 2
-      io.write_bytes(0x2B_u8, IO::ByteFormat::LittleEndian)  # Context tag + Float64
-      io.write_bytes(0x02_u8, IO::ByteFormat::LittleEndian)  # Tag 2
+      io.write_bytes(0x2B_u8, IO::ByteFormat::LittleEndian) # Context tag + Float64
+      io.write_bytes(0x02_u8, IO::ByteFormat::LittleEndian) # Tag 2
       io.write_bytes(2.5_f64, IO::ByteFormat::LittleEndian)
 
-      io.write_bytes(0x18_u8, IO::ByteFormat::LittleEndian)  # Structure end
+      io.write_bytes(0x18_u8, IO::ByteFormat::LittleEndian) # Structure end
 
       obj = WithFloats.from_slice(io.to_slice)
       output = obj.to_slice
@@ -449,29 +449,29 @@ describe TLV::Serializable do
   describe "signed integers" do
     it "handles signed integer types" do
       io = IO::Memory.new
-      io.write_bytes(0x15_u8, IO::ByteFormat::LittleEndian)  # Structure start
+      io.write_bytes(0x15_u8, IO::ByteFormat::LittleEndian) # Structure start
 
       # Int8 tag 1
-      io.write_bytes(0x20_u8, IO::ByteFormat::LittleEndian)  # Context tag + SignedInt8
-      io.write_bytes(0x01_u8, IO::ByteFormat::LittleEndian)  # Tag 1
+      io.write_bytes(0x20_u8, IO::ByteFormat::LittleEndian) # Context tag + SignedInt8
+      io.write_bytes(0x01_u8, IO::ByteFormat::LittleEndian) # Tag 1
       io.write_bytes(-42_i8, IO::ByteFormat::LittleEndian)
 
       # Int16 tag 2
-      io.write_bytes(0x21_u8, IO::ByteFormat::LittleEndian)  # Context tag + SignedInt16
-      io.write_bytes(0x02_u8, IO::ByteFormat::LittleEndian)  # Tag 2
+      io.write_bytes(0x21_u8, IO::ByteFormat::LittleEndian) # Context tag + SignedInt16
+      io.write_bytes(0x02_u8, IO::ByteFormat::LittleEndian) # Tag 2
       io.write_bytes(-1000_i16, IO::ByteFormat::LittleEndian)
 
       # Int32 tag 3
-      io.write_bytes(0x22_u8, IO::ByteFormat::LittleEndian)  # Context tag + SignedInt32
-      io.write_bytes(0x03_u8, IO::ByteFormat::LittleEndian)  # Tag 3
+      io.write_bytes(0x22_u8, IO::ByteFormat::LittleEndian) # Context tag + SignedInt32
+      io.write_bytes(0x03_u8, IO::ByteFormat::LittleEndian) # Tag 3
       io.write_bytes(-100000_i32, IO::ByteFormat::LittleEndian)
 
       # Int64 tag 4
-      io.write_bytes(0x23_u8, IO::ByteFormat::LittleEndian)  # Context tag + SignedInt64
-      io.write_bytes(0x04_u8, IO::ByteFormat::LittleEndian)  # Tag 4
+      io.write_bytes(0x23_u8, IO::ByteFormat::LittleEndian) # Context tag + SignedInt64
+      io.write_bytes(0x04_u8, IO::ByteFormat::LittleEndian) # Tag 4
       io.write_bytes(-10000000000_i64, IO::ByteFormat::LittleEndian)
 
-      io.write_bytes(0x18_u8, IO::ByteFormat::LittleEndian)  # Structure end
+      io.write_bytes(0x18_u8, IO::ByteFormat::LittleEndian) # Structure end
 
       obj = WithSignedInts.from_slice(io.to_slice)
       obj.int8_val.should eq(-42_i8)
@@ -484,10 +484,10 @@ describe TLV::Serializable do
   describe "TLV::Any fields" do
     it "handles TLV::Any as a field type" do
       bytes = Bytes[
-        0x15,                   # Structure start
-        0x24, 0x01, 0x2A,       # Tag 1, UInt8 42 (dynamic)
+        0x15,                               # Structure start
+        0x24, 0x01, 0x2A,                   # Tag 1, UInt8 42 (dynamic)
         0x26, 0x02, 0x64, 0x00, 0x00, 0x00, # Tag 2, UInt32 100 (static)
-        0x18,                   # Structure end
+        0x18,                               # Structure end
       ]
 
       obj = WithTLVAny.from_slice(bytes)
@@ -497,10 +497,10 @@ describe TLV::Serializable do
 
     it "round-trips TLV::Any fields" do
       bytes = Bytes[
-        0x15,                               # Structure start
+        0x15,                                           # Structure start
         0x2C, 0x01, 0x05, 0x48, 0x65, 0x6C, 0x6C, 0x6F, # Tag 1, String "Hello" (dynamic)
-        0x26, 0x02, 0xC8, 0x00, 0x00, 0x00, # Tag 2, UInt32 200 (static)
-        0x18,                               # Structure end
+        0x26, 0x02, 0xC8, 0x00, 0x00, 0x00,             # Tag 2, UInt32 200 (static)
+        0x18,                                           # Structure end
       ]
 
       obj = WithTLVAny.from_slice(bytes)
@@ -514,10 +514,10 @@ describe TLV::Serializable do
   describe "to_tlv method" do
     it "returns TLV::Any from serializable" do
       bytes = Bytes[
-        0x15,                   # Structure start
+        0x15,                               # Structure start
         0x26, 0x01, 0x78, 0x56, 0x34, 0x12, # Tag 1, UInt32 0x12345678
-        0x25, 0x02, 0x39, 0x30, # Tag 2, UInt16 0x3039 (12345)
-        0x18,                   # Structure end
+        0x25, 0x02, 0x39, 0x30,             # Tag 2, UInt16 0x3039 (12345)
+        0x18,                               # Structure end
       ]
 
       packet = SimplePacket.from_slice(bytes)
@@ -545,11 +545,11 @@ describe TLV::Serializable do
   describe "non-optional nullable fields" do
     it "handles not_optional_field with a value" do
       bytes = Bytes[
-        0x15,                               # Structure start
-        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00, # Tag 1, UInt32 42
+        0x15,                                           # Structure start
+        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00,             # Tag 1, UInt32 42
         0x2C, 0x02, 0x05, 0x48, 0x65, 0x6C, 0x6C, 0x6F, # Tag 2, String "Hello"
         0x2C, 0x03, 0x05, 0x57, 0x6F, 0x72, 0x6C, 0x64, # Tag 3, String "World"
-        0x18,                               # Structure end
+        0x18,                                           # Structure end
       ]
 
       obj = WithNotOptional.from_slice(bytes)
@@ -607,29 +607,29 @@ describe TLV::Serializable do
     it "handles common profile tags" do
       # Build TLV with common profile tag manually
       io = IO::Memory.new
-      io.write_bytes(0x15_u8, IO::ByteFormat::LittleEndian)  # Structure start
+      io.write_bytes(0x15_u8, IO::ByteFormat::LittleEndian) # Structure start
 
       # Context tag 1, UInt32 100
-      io.write_bytes(0x26_u8, IO::ByteFormat::LittleEndian)  # Context + UInt32
-      io.write_bytes(0x01_u8, IO::ByteFormat::LittleEndian)  # Tag 1
+      io.write_bytes(0x26_u8, IO::ByteFormat::LittleEndian) # Context + UInt32
+      io.write_bytes(0x01_u8, IO::ByteFormat::LittleEndian) # Tag 1
       io.write_bytes(100_u32, IO::ByteFormat::LittleEndian)
 
       # Common Profile Tag: profile_id=0x235A, tag_id=42, UInt32 200
       # Control byte: 0x46 = common profile (010) + unsigned int 32-bit (00110)
       io.write_bytes(0x46_u8, IO::ByteFormat::LittleEndian)
-      io.write_bytes(0x235A_u16, IO::ByteFormat::LittleEndian)  # profile_id
-      io.write_bytes(42_u16, IO::ByteFormat::LittleEndian)      # tag_id
+      io.write_bytes(0x235A_u16, IO::ByteFormat::LittleEndian) # profile_id
+      io.write_bytes(42_u16, IO::ByteFormat::LittleEndian)     # tag_id
       io.write_bytes(200_u32, IO::ByteFormat::LittleEndian)
 
       # Vendor Profile Tag: vendor=0xFFFF, profile=0x235A, tag=42, UInt32 300
       # Control byte: 0x66 = vendor profile (011) + unsigned int 32-bit (00110)
       io.write_bytes(0x66_u8, IO::ByteFormat::LittleEndian)
-      io.write_bytes(0xFFFF_u16, IO::ByteFormat::LittleEndian)  # vendor_id
-      io.write_bytes(0x235A_u16, IO::ByteFormat::LittleEndian)  # profile_id
-      io.write_bytes(42_u16, IO::ByteFormat::LittleEndian)      # tag_id
+      io.write_bytes(0xFFFF_u16, IO::ByteFormat::LittleEndian) # vendor_id
+      io.write_bytes(0x235A_u16, IO::ByteFormat::LittleEndian) # profile_id
+      io.write_bytes(42_u16, IO::ByteFormat::LittleEndian)     # tag_id
       io.write_bytes(300_u32, IO::ByteFormat::LittleEndian)
 
-      io.write_bytes(0x18_u8, IO::ByteFormat::LittleEndian)  # Structure end
+      io.write_bytes(0x18_u8, IO::ByteFormat::LittleEndian) # Structure end
 
       obj = WithProfileTags.from_slice(io.to_slice)
       obj.required_field.should eq(100_u32)
@@ -639,7 +639,7 @@ describe TLV::Serializable do
 
     it "round-trips profile tags" do
       io = IO::Memory.new
-      io.write_bytes(0x15_u8, IO::ByteFormat::LittleEndian)  # Structure start
+      io.write_bytes(0x15_u8, IO::ByteFormat::LittleEndian) # Structure start
 
       # Context tag 1, UInt32 100
       io.write_bytes(0x26_u8, IO::ByteFormat::LittleEndian)
@@ -659,7 +659,7 @@ describe TLV::Serializable do
       io.write_bytes(42_u16, IO::ByteFormat::LittleEndian)
       io.write_bytes(300_u32, IO::ByteFormat::LittleEndian)
 
-      io.write_bytes(0x18_u8, IO::ByteFormat::LittleEndian)  # Structure end
+      io.write_bytes(0x18_u8, IO::ByteFormat::LittleEndian) # Structure end
 
       obj = WithProfileTags.from_slice(io.to_slice)
       output = obj.to_slice

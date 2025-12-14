@@ -45,18 +45,18 @@ module TLV
       bits 5, element_type_raw : UInt8
     end
 
-    group :context, onlyif: ->{ tag_format == TagType::Context.value } do
+    group :context, onlyif: -> { tag_format == TagType::Context.value } do
       field tag_id : UInt8
     end
 
     # Common Profile - 2 bytes profile + 2 bytes tag
-    group :common, onlyif: ->{ tag_format == TagType::CommonProfile.value } do
+    group :common, onlyif: -> { tag_format == TagType::CommonProfile.value } do
       field profile_id : UInt16
       field tag_id : UInt16
     end
 
     # Vendor Profile - 2 bytes vendor + 2 bytes profile + 2 bytes tag
-    group :vendor, onlyif: ->{ tag_format >= TagType::VendorProfile.value } do
+    group :vendor, onlyif: -> { tag_format >= TagType::VendorProfile.value } do
       field vendor_id : UInt16
       field profile_id : UInt16
       field tag_id : UInt16

@@ -463,6 +463,126 @@ describe TLV::Any do
     end
   end
 
+  describe "IO deserialization" do
+    it "deserializes unsigned int from IO using read_bytes" do
+      bytes = Bytes[0x04, 0x2A] # Anonymous UInt8 value 42
+      io = IO::Memory.new(bytes)
+      any = io.read_bytes(TLV::Any)
+      any.header.element_type.should eq(TLV::ElementType::UnsignedInt8)
+      any.as_u8.should eq(42_u8)
+    end
+
+    it "deserializes string from IO using read_bytes" do
+      bytes = Bytes[0x0C, 0x05, 0x48, 0x65, 0x6C, 0x6C, 0x6F] # "Hello"
+      io = IO::Memory.new(bytes)
+      any = io.read_bytes(TLV::Any)
+      any.header.element_type.should eq(TLV::ElementType::UTF8String1)
+      any.as_s.should eq("Hello")
+    end
+
+    it "deserializes structure from IO using read_bytes" do
+      bytes = Bytes[
+        0x15,                   # Structure start
+        0x25, 0x01, 0xF1, 0xFF, # Tag 1, UInt16 65521
+        0x25, 0x02, 0x01, 0x80, # Tag 2, UInt16 32769
+        0x18,                   # Structure end
+      ]
+
+      io = IO::Memory.new(bytes)
+      any = io.read_bytes(TLV::Any)
+      any.header.element_type.should eq(TLV::ElementType::Structure)
+      any.size.should eq(2)
+      any[1_u8].as_u16.should eq(65521_u16)
+      any[2_u8].as_u16.should eq(32769_u16)
+    end
+
+    it "deserializes array from IO using read_bytes" do
+      bytes = Bytes[
+        0x16,       # Array start
+        0x04, 0x01, # Anonymous UInt8: 1
+        0x04, 0x02, # Anonymous UInt8: 2
+        0x04, 0x03, # Anonymous UInt8: 3
+        0x18,       # Array end
+      ]
+
+      io = IO::Memory.new(bytes)
+      any = io.read_bytes(TLV::Any)
+      any.header.element_type.should eq(TLV::ElementType::Array)
+      any.size.should eq(3)
+      any[0].as_u8.should eq(1_u8)
+      any[1].as_u8.should eq(2_u8)
+      any[2].as_u8.should eq(3_u8)
+    end
+
+    it "round-trips through IO serialization" do
+      structure = TLV::Structure.new
+      structure[1_u8] = TLV::Any.new(65521_u16, 1_u8)
+      structure[2_u8] = TLV::Any.new(32769_u16, 2_u8)
+      structure[3_u8] = TLV::Any.new("Light", 3_u8)
+
+      original = TLV::Any.new(structure)
+
+      # Serialize to IO
+      io = IO::Memory.new
+      io.write_bytes(original)
+      io.rewind
+
+      # Deserialize from IO
+      parsed = io.read_bytes(TLV::Any)
+      parsed.size.should eq(3)
+      parsed[1_u8].as_u16.should eq(65521_u16)
+      parsed[2_u8].as_u16.should eq(32769_u16)
+      parsed[3_u8].as_s.should eq("Light")
+    end
+
+    it "deserializes boolean from IO using read_bytes" do
+      bytes_true = Bytes[0x09]
+      io_true = IO::Memory.new(bytes_true)
+      any_true = io_true.read_bytes(TLV::Any)
+      any_true.header.element_type.should eq(TLV::ElementType::BooleanTrue)
+      any_true.as_bool.should be_true
+
+      bytes_false = Bytes[0x08]
+      io_false = IO::Memory.new(bytes_false)
+      any_false = io_false.read_bytes(TLV::Any)
+      any_false.header.element_type.should eq(TLV::ElementType::BooleanFalse)
+      any_false.as_bool.should be_false
+    end
+
+    it "deserializes null from IO using read_bytes" do
+      bytes = Bytes[0x14]
+      io = IO::Memory.new(bytes)
+      any = io.read_bytes(TLV::Any)
+      any.header.element_type.should eq(TLV::ElementType::Null)
+      any.value.should be_nil
+    end
+
+    it "deserializes byte string from IO using read_bytes" do
+      bytes = Bytes[0x10, 0x04, 0xDE, 0xAD, 0xBE, 0xEF]
+      io = IO::Memory.new(bytes)
+      any = io.read_bytes(TLV::Any)
+      any.header.element_type.should eq(TLV::ElementType::ByteString1)
+      any.as_bytes.should eq(Bytes[0xDE, 0xAD, 0xBE, 0xEF])
+    end
+
+    it "deserializes nested structure from IO using read_bytes" do
+      bytes = Bytes[
+        0x15,             # Outer structure start
+        0x35, 0x01,       # Tag 1 = structure start
+        0x24, 0x01, 0x2A, # Tag 1, UInt8 42
+        0x18,             # Inner structure end
+        0x18,             # Outer structure end
+      ]
+
+      io = IO::Memory.new(bytes)
+      any = io.read_bytes(TLV::Any)
+      any.size.should eq(1)
+      inner = any[1_u8]
+      inner.container?.should be_true
+      inner[1_u8].as_u8.should eq(42_u8)
+    end
+  end
+
   describe "iteration" do
     it "iterates over structure entries" do
       structure = TLV::Structure.new

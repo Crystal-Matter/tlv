@@ -33,7 +33,13 @@ module TLV
       def initialize(any : TLV::Any)
         {% verbatim do %}
           {% begin %}
-            %structure = any.value.as(TLV::Structure)
+            %structure = any.value.as?(TLV::Structure)
+            if %structure.nil?
+              %actual_type = any.value.class.name
+              raise ::TLV::DeserializationError.new(
+                "Cannot deserialize {{ @type }}: expected TLV Structure, got #{%actual_type} (element_type: #{any.header.element_type})"
+              )
+            end
 
             {% for ivar in @type.instance_vars %}
               {% ann = ivar.annotation(::TLV::Field) %}
@@ -42,7 +48,7 @@ module TLV
                 {% type = ivar.type %}
                 {% optional = ann[:optional] != false && ivar.type.nilable? %}
                 {% has_default = ivar.has_default_value? %}
-                {% is_tuple = type.name.starts_with?("Tuple(") || (type.union? && type.union_types.any? { |t| t.name.starts_with?("Tuple(") }) %}
+                {% is_tuple = type.name.starts_with?("Tuple(") || (type.union? && type.union_types.any?(&.name.starts_with?("Tuple("))) %}
 
                 {% # Determine the lookup key for the structure hash
  lookup_key = if tag.is_a?(NumberLiteral)
@@ -60,9 +66,21 @@ module TLV
                 {% if optional %}
                   if %found{ivar.name}
                     {% if is_tuple %}
-                      @{{ ivar.name }} = ::TLV::Serializable.deserialize_tuple(%found{ivar.name}.not_nil!, {{ type.id }})
+                      @{{ ivar.name }} = ::TLV::Serializable.deserialize_tuple_field(
+                        %found{ivar.name}.not_nil!,
+                        {{ type.id }},
+                        {{ @type.stringify }},
+                        {{ ivar.name.stringify }},
+                        {{ lookup_key.stringify }}
+                      )
                     {% else %}
-                      @{{ ivar.name }} = ::TLV::Serializable.deserialize_value(%found{ivar.name}.not_nil!, {{ type.id }})
+                      @{{ ivar.name }} = ::TLV::Serializable.deserialize_field(
+                        %found{ivar.name}.not_nil!,
+                        {{ type.id }},
+                        {{ @type.stringify }},
+                        {{ ivar.name.stringify }},
+                        {{ lookup_key.stringify }}
+                      )
                     {% end %}
                   else
                     @{{ ivar.name }} = nil
@@ -70,9 +88,21 @@ module TLV
                 {% elsif has_default %}
                   if %found{ivar.name}
                     {% if is_tuple %}
-                      @{{ ivar.name }} = ::TLV::Serializable.deserialize_tuple(%found{ivar.name}.not_nil!, {{ type.id }})
+                      @{{ ivar.name }} = ::TLV::Serializable.deserialize_tuple_field(
+                        %found{ivar.name}.not_nil!,
+                        {{ type.id }},
+                        {{ @type.stringify }},
+                        {{ ivar.name.stringify }},
+                        {{ lookup_key.stringify }}
+                      )
                     {% else %}
-                      @{{ ivar.name }} = ::TLV::Serializable.deserialize_value(%found{ivar.name}.not_nil!, {{ type.id }})
+                      @{{ ivar.name }} = ::TLV::Serializable.deserialize_field(
+                        %found{ivar.name}.not_nil!,
+                        {{ type.id }},
+                        {{ @type.stringify }},
+                        {{ ivar.name.stringify }},
+                        {{ lookup_key.stringify }}
+                      )
                     {% end %}
                   else
                     @{{ ivar.name }} = {{ ivar.default_value }}
@@ -80,12 +110,26 @@ module TLV
                 {% else %}
                   %any{ivar.name} = %found{ivar.name}
                   if %any{ivar.name}.nil?
-                    raise "Missing required TLV field: {{ ivar.name }} (tag {{ lookup_key }})"
+                    raise ::TLV::DeserializationError.new(
+                      "{{ @type }}: missing required field '{{ ivar.name }}' (tag {{ lookup_key }})"
+                    )
                   end
                   {% if is_tuple %}
-                    @{{ ivar.name }} = ::TLV::Serializable.deserialize_tuple(%any{ivar.name}.not_nil!, {{ type.id }})
+                    @{{ ivar.name }} = ::TLV::Serializable.deserialize_tuple_field(
+                      %any{ivar.name}.not_nil!,
+                      {{ type.id }},
+                      {{ @type.stringify }},
+                      {{ ivar.name.stringify }},
+                      {{ lookup_key.stringify }}
+                    )
                   {% else %}
-                    @{{ ivar.name }} = ::TLV::Serializable.deserialize_value(%any{ivar.name}.not_nil!, {{ type.id }})
+                    @{{ ivar.name }} = ::TLV::Serializable.deserialize_field(
+                      %any{ivar.name}.not_nil!,
+                      {{ type.id }},
+                      {{ @type.stringify }},
+                      {{ ivar.name.stringify }},
+                      {{ lookup_key.stringify }}
+                    )
                   {% end %}
                 {% end %}
               {% end %}
@@ -106,8 +150,8 @@ module TLV
                 {% type = ivar.type %}
                 {% optional = ann[:optional] != false && ivar.type.nilable? %}
                 {% container = ann[:container] %}
-                {% is_tuple = type.name.starts_with?("Tuple(") || (type.union? && type.union_types.any? { |t| t.name.starts_with?("Tuple(") }) %}
-                {% is_array = type.name.starts_with?("Array(") || (type.union? && type.union_types.any? { |t| t.name.starts_with?("Array(") }) %}
+                {% is_tuple = type.name.starts_with?("Tuple(") || (type.union? && type.union_types.any?(&.name.starts_with?("Tuple("))) %}
+                {% is_array = type.name.starts_with?("Array(") || (type.union? && type.union_types.any?(&.name.starts_with?("Array("))) %}
 
                 {% # Determine the tag format (used for both hash key and TLV::Any tag)
  if tag.is_a?(NumberLiteral)
@@ -286,6 +330,39 @@ module TLV
           ::TLV::Serializable.deserialize_value(%list[{{ index }}], {{ type }}),
         {% end %}
       }
+    end
+
+    # Handle Tuples with error context
+    macro deserialize_tuple_field(any, tuple_type, class_name, field_name, tag)
+      begin
+        %list = {{ any }}.as_list
+        {% types = tuple_type.type_vars %}
+        {
+          {% for type, index in types %}
+            ::TLV::Serializable.deserialize_value(%list[{{ index }}], {{ type }}),
+          {% end %}
+        }
+      rescue ex : TypeCastError
+        %actual_type = {{ any }}.value.class.name
+        raise ::TLV::DeserializationError.new(
+          "#{{{ class_name }}}.#{{{ field_name }}}: expected #{{{ tuple_type.stringify }}}, got #{%actual_type} (element_type: #{{{ any }}.header.element_type}, tag: #{{{ tag }}})"
+        )
+      end
+    end
+
+    # Wrapper for deserialization with improved error messages
+    def self.deserialize_field(any : TLV::Any, type : T.class, class_name : String, field_name : String, tag : String) : T forall T
+      deserialize_value(any, T)
+    rescue ex : TypeCastError
+      actual_type = any.value.class.name
+      raise ::TLV::DeserializationError.new(
+        "#{class_name}.#{field_name}: expected #{T}, got #{actual_type} (element_type: #{any.header.element_type}, tag: #{tag})"
+      )
+    rescue ex : ::TLV::DeserializationError
+      # Add context to nested deserialization errors
+      raise ::TLV::DeserializationError.new(
+        "#{class_name}.#{field_name} (tag: #{tag}): #{ex.message}"
+      )
     end
 
     # Helper methods for serialization

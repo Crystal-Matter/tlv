@@ -602,7 +602,7 @@ describe TLV::Serializable do
         0x18,                               # Structure end
       ]
 
-      expect_raises(Exception, /Missing required TLV field: not_optional_field/) do
+      expect_raises(TLV::DeserializationError, /WithNotOptional: missing required field 'not_optional_field'/) do
         WithNotOptional.from_slice(bytes)
       end
     end
@@ -855,6 +855,140 @@ describe TLV::Serializable do
       parsed = WithForcedList.from_slice(output)
 
       parsed.items.should eq([5_u8, 6_u8, 7_u8])
+    end
+  end
+
+  describe "IO deserialization" do
+    it "deserializes a simple class from IO using read_bytes" do
+      bytes = Bytes[
+        0x15,                                     # Structure start
+        0x2C, 0x01, 0x04, 0x4A, 0x6F, 0x68, 0x6E, # Tag 1, String "John"
+        0x2C, 0x02, 0x03, 0x44, 0x6F, 0x65,       # Tag 2, String "Doe"
+        0x18,                                     # Structure end
+      ]
+
+      io = IO::Memory.new(bytes)
+      user = io.read_bytes(SimpleUser)
+      user.first_name.should eq("John")
+      user.last_name.should eq("Doe")
+    end
+
+    it "deserializes a struct from IO using read_bytes" do
+      bytes = Bytes[
+        0x15,                               # Structure start
+        0x26, 0x01, 0x78, 0x56, 0x34, 0x12, # Tag 1, UInt32 0x12345678
+        0x25, 0x02, 0x39, 0x30,             # Tag 2, UInt16 0x3039 (12345)
+        0x18,                               # Structure end
+      ]
+
+      io = IO::Memory.new(bytes)
+      packet = io.read_bytes(SimplePacket)
+      packet.id.should eq(0x12345678_u32)
+      packet.count.should eq(12345_u16)
+    end
+
+    it "deserializes with optional fields from IO" do
+      bytes = Bytes[
+        0x15,                                           # Structure start
+        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00,             # Tag 1, UInt32 42
+        0x2C, 0x02, 0x05, 0x48, 0x65, 0x6C, 0x6C, 0x6F, # Tag 2, String "Hello"
+        0x18,                                           # Structure end
+      ]
+
+      io = IO::Memory.new(bytes)
+      obj = io.read_bytes(WithOptional)
+      obj.required_field.should eq(42_u32)
+      obj.optional_field.should eq("Hello")
+    end
+
+    it "deserializes nested structures from IO" do
+      bytes = Bytes[
+        0x15,                                           # Outer structure start
+        0x35, 0x01,                                     # Tag 1 = structure start (user)
+        0x2C, 0x01, 0x04, 0x4A, 0x61, 0x6E, 0x65,       # Tag 1, String "Jane"
+        0x2C, 0x02, 0x05, 0x53, 0x6D, 0x69, 0x74, 0x68, # Tag 2, String "Smith"
+        0x18,                                           # Inner structure end
+        0x26, 0x02, 0x64, 0x00, 0x00, 0x00,             # Tag 2, UInt32 100
+        0x18,                                           # Outer structure end
+      ]
+
+      io = IO::Memory.new(bytes)
+      obj = io.read_bytes(NestedOuter)
+      obj.user.first_name.should eq("Jane")
+      obj.user.last_name.should eq("Smith")
+      obj.count.should eq(100_u32)
+    end
+
+    it "round-trips through IO serialization" do
+      bytes = Bytes[
+        0x15,                                           # Structure start
+        0x25, 0x01, 0xF1, 0xFF,                         # Tag 1, UInt16 65521
+        0x25, 0x02, 0x01, 0x80,                         # Tag 2, UInt16 32769
+        0x2C, 0x03, 0x05, 0x4C, 0x69, 0x67, 0x68, 0x74, # Tag 3, String "Light"
+        0x18,                                           # Structure end
+      ]
+
+      io_in = IO::Memory.new(bytes)
+      device = io_in.read_bytes(DeviceInfo)
+
+      # Serialize back to IO
+      io_out = IO::Memory.new
+      io_out.write_bytes(device)
+      io_out.rewind
+
+      # Deserialize again
+      device2 = io_out.read_bytes(DeviceInfo)
+      device2.vendor_id.should eq(device.vendor_id)
+      device2.product_id.should eq(device.product_id)
+      device2.name.should eq(device.name)
+    end
+
+    it "deserializes arrays from IO" do
+      bytes = Bytes[
+        0x15,       # Structure start
+        0x36, 0x01, # Tag 1 = array start
+        0x04, 0x01, # Anonymous UInt8: 1
+        0x04, 0x02, # Anonymous UInt8: 2
+        0x04, 0x03, # Anonymous UInt8: 3
+        0x18,       # Array end
+        0x18,       # Structure end
+      ]
+
+      io = IO::Memory.new(bytes)
+      obj = io.read_bytes(WithArray)
+      obj.items.should eq([1_u8, 2_u8, 3_u8])
+    end
+
+    it "deserializes booleans from IO" do
+      bytes = Bytes[
+        0x15,       # Structure start
+        0x29, 0x01, # Tag 1 = true
+        0x28, 0x02, # Tag 2 = false
+        0x18,       # Structure end
+      ]
+
+      io = IO::Memory.new(bytes)
+      obj = io.read_bytes(WithBooleans)
+      obj.enabled.should be_true
+      obj.active.should be_false
+    end
+
+    it "deserializes tuples from IO" do
+      bytes = Bytes[
+        0x15,                                     # Structure start
+        0x37, 0x01,                               # Tag 1 = list start
+        0x04, 0x2A,                               # Anonymous UInt8: 42
+        0x0C, 0x05, 0x48, 0x65, 0x6C, 0x6C, 0x6F, # Anonymous String: "Hello"
+        0x05, 0x39, 0x30,                         # Anonymous UInt16: 12345
+        0x18,                                     # List end
+        0x18,                                     # Structure end
+      ]
+
+      io = IO::Memory.new(bytes)
+      obj = io.read_bytes(WithTuple)
+      obj.items[0].should eq(42_u8)
+      obj.items[1].should eq("Hello")
+      obj.items[2].should eq(12345_u16)
     end
   end
 end

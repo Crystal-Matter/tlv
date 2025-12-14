@@ -205,7 +205,7 @@ module TLV
     end
 
     protected def write_structure(io : IO, structure : Structure) : Nil
-      structure.each do |tag, any|
+      structure.each do |_, any|
         any.to_io(io)
       end
       # Write end of container
@@ -353,14 +353,14 @@ module TLV
     end
 
     # Iterate over structure entries (tag, value pairs)
-    def each_pair(&block : TagId, Any ->)
+    def each_pair(& : TagId, Any ->)
       value.as(Structure).each do |k, v|
         yield k, v
       end
     end
 
     # Iterate over list/array entries
-    def each(&block : Any ->)
+    def each(& : Any ->)
       value.as(List).each do |v|
         yield v
       end

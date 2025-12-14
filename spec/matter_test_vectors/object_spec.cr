@@ -100,4 +100,41 @@ describe "TLV Object (matter.js test vectors)" do
       list[0].as_s.should eq("test")
     end
   end
+
+  describe "IO deserialization" do
+    it "deserializes object with all fields from IO using read_bytes" do
+      bytes = "152401012c02047465737418".hexbytes
+
+      io = IO::Memory.new(bytes)
+      obj = io.read_bytes(TestObject)
+      obj.mandatory_field.should eq(1_u8)
+      obj.optional_field.should eq("test")
+    end
+
+    it "deserializes object without optional fields from IO using read_bytes" do
+      bytes = "1524010118".hexbytes
+
+      io = IO::Memory.new(bytes)
+      obj = io.read_bytes(TestObject)
+      obj.mandatory_field.should eq(1_u8)
+      obj.optional_field.should be_nil
+    end
+
+    it "round-trips object through IO serialization" do
+      bytes = "152401012c02047465737418".hexbytes
+
+      io_in = IO::Memory.new(bytes)
+      obj = io_in.read_bytes(TestObject)
+
+      # Serialize back to IO
+      io_out = IO::Memory.new
+      io_out.write_bytes(obj)
+      io_out.rewind
+
+      # Deserialize again and verify
+      obj2 = io_out.read_bytes(TestObject)
+      obj2.mandatory_field.should eq(obj.mandatory_field)
+      obj2.optional_field.should eq(obj.optional_field)
+    end
+  end
 end

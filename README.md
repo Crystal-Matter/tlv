@@ -19,6 +19,16 @@ Matter TLV encoder/decoder
 ```crystal
 require "tlv"
 
+class User
+  include TLV::Serializable
+
+  @[TLV::Field(tag: 1)]
+  property first_name : String
+
+  @[TLV::Field(tag: 2)]
+  property last_name : String
+end
+
 class Packet
   include TLV::Serializable
 
@@ -31,86 +41,63 @@ class Packet
   @[TLV::Field(tag: 3)]
   property? duplex : Bool
 
-  @[TLV::Field(tag: 5)]
+  @[TLV::Field(tag: 4)]
   property message : String
 
-  @[TLV::Field(tag: 6)]
-  property encoded_message : Slice(UInt8)
+  @[TLV::Field(tag: 5)]
+  property encoded_message : Bytes
 
-  @[TLV::Field(tag: 7)]
+  # arrays
+  @[TLV::Field(tag: 6)]
   property array : Array(TLV::Value)
+
+  # lists
+  @[TLV::Field(tag: 1)]
+  property list : Tuple(UInt8, String, UInt16)
+
+  # Tuple serialized as TLV Array (homogeneous format)
+  @[TLV::Field(tag: 1, container: :array)]
+  property items : Tuple(UInt8, UInt8, UInt8)
+
+  # Array serialized as TLV List (heterogeneous format)
+  @[TLV::Field(tag: 1, container: :list)]
+  property items : Array(UInt8)
+
+  # Nested structures
+  @[TLV::Field(tag: 7)]
+  property user : User
 
   @[TLV::Field(tag: 8)]
-  property nested_packet : NestedPacket
+  property optional_field : String?
 
+  # nilable required field
+  @[TLV::Field(tag: 9, optional: false)]
+  property not_optional_field : String?
+
+  # Common Profile Tag
   @[TLV::Field(tag: {0x235A, 42})]
-  property foo : String
+  property common : UInt32
 
-  @[TLV::Field(tag: {nil, 42})]
-  property bar : String
+  # Vendor Profile Tag
+  @[TLV::Field(tag: {0xFFFF, 0x235A, 42})]
+  property vendor : UInt32
 end
 
-class User
-  include TLV::Serializable
+io = IO::Memory.new # bytes from network etc
+packet = io.read_bytes(Packet)
+packet.to_slice
 
-  @[TLV::Field(tag: 1)]
-  property first_name : String
+```
 
-  @[TLV::Field(tag: 2)]
-  property last_name : String
-end
+There is also a `TLV::Any` type which should really only be used externally for payloads with an anonymous type. (i.e. no wrapping structure)
 
-class NestedPacket
-  include TLV::Serializable
+```crystal
+require "tlv"
 
-  @[TLV::Field(tag: 1)]
-  property id : UInt32
-
-  @[TLV::Field(tag: 2)]
-  property message : String
-
-  @[TLV::Field(tag: {nil, 1})]
-  property array : Array(TLV::Value)
-
-  @[TLV::Field(tag: {nil, 2})]
-  property user : User
-end
-
-io = IO::Memory.new
-
-writer = TLV::Writer.new(io)
-
-input = {
-             1 => 1,
-             2 => 65535,
-             3 => true,
-             4 => nil,
-             5 => "Hello, World!",
-             6 => "Good morning!".to_slice,
-             7 => [1, 2, 3, 4, 5, "Bye, World!", true, false] of TLV::Value,
-             8 => {1 => 1_u32, 2 => "UTF-8 კოდირების ტესტი", {nil, 1} => [1, 2, 3, 4, { {100, 100} => "你好" } of TLV::Tag => TLV::Value] of TLV::Value, {nil, 2} => {1 => "Giorgi", 2 => "Kavrelishvili"} of TLV::Tag => TLV::Value} of TLV::Tag => TLV::Value,
-  {0x235A, 42} => "FOO",
-  {nil, 42}    => "BAR",
-} of TLV::Tag => TLV::Value
-
-writer.put(nil, input)
-
-data = io.rewind.to_slice
-
-reader = TLV::Reader.new(data)
-
-pp reader.get
-
-# Parse the data into packet
-packet = Packet.new(data)
-pp packet
-
-# Re-parse packet data into a new packet
-packet2 = Packet.new(packet.to_slice)
-pp packet2
-
-is_equal = packet.to_slice == packet2.to_slice
-puts "Is it equal? #{is_equal}"
+io = IO::Memory.new(Bytes[0x05, 0xF1, 0xFF]) # Anonymous UInt16 value 65521
+any = io.read_bytes(TLV::Any)
+any.header.element_type # => TLV::ElementType::UnsignedInt16
+any.as_u16 # => 65521_u16
 ```
 
 ## Contributing
@@ -123,4 +110,4 @@ puts "Is it equal? #{is_equal}"
 
 ## Contributors
 
-- [Giorgi Kavrelishvili](https://github.com/grkek) - creator and maintainer
+- [Stephen von Takach](https://github.com/stakach) - creator and maintainer

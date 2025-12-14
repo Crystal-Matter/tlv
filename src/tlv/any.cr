@@ -240,21 +240,42 @@ module TLV
       value.as?(List).try(&.[index]?)
     end
 
-    # Get the raw value cast to specific types
+    # Get the raw value cast to specific types (with widening support)
     def as_i8 : Int8
       value.as(Int8)
     end
 
     def as_i16 : Int16
-      value.as(Int16)
+      v = value
+      case v
+      when Int8  then v.to_i16
+      when Int16 then v
+      else
+        raise TypeCastError.new("Can't cast #{v.class} to Int16")
+      end
     end
 
     def as_i32 : Int32
-      value.as(Int32)
+      v = value
+      case v
+      when Int8  then v.to_i32
+      when Int16 then v.to_i32
+      when Int32 then v
+      else
+        raise TypeCastError.new("Can't cast #{v.class} to Int32")
+      end
     end
 
     def as_i64 : Int64
-      value.as(Int64)
+      v = value
+      case v
+      when Int8  then v.to_i64
+      when Int16 then v.to_i64
+      when Int32 then v.to_i64
+      when Int64 then v
+      else
+        raise TypeCastError.new("Can't cast #{v.class} to Int64")
+      end
     end
 
     def as_u8 : UInt8
@@ -262,15 +283,36 @@ module TLV
     end
 
     def as_u16 : UInt16
-      value.as(UInt16)
+      v = value
+      case v
+      when UInt8  then v.to_u16
+      when UInt16 then v
+      else
+        raise TypeCastError.new("Can't cast #{v.class} to UInt16")
+      end
     end
 
     def as_u32 : UInt32
-      value.as(UInt32)
+      v = value
+      case v
+      when UInt8  then v.to_u32
+      when UInt16 then v.to_u32
+      when UInt32 then v
+      else
+        raise TypeCastError.new("Can't cast #{v.class} to UInt32")
+      end
     end
 
     def as_u64 : UInt64
-      value.as(UInt64)
+      v = value
+      case v
+      when UInt8  then v.to_u64
+      when UInt16 then v.to_u64
+      when UInt32 then v.to_u64
+      when UInt64 then v
+      else
+        raise TypeCastError.new("Can't cast #{v.class} to UInt64")
+      end
     end
 
     def as_bool : Bool
@@ -345,44 +387,100 @@ module TLV
       new(header, value)
     end
 
+    # Signed integers - use minimum-size encoding
     def self.new(value : Int8, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil) : Any
       header = Header.new(ElementType::SignedInt8, tag)
       new(header, value)
     end
 
     def self.new(value : Int16, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil) : Any
-      header = Header.new(ElementType::SignedInt16, tag)
-      new(header, value)
+      # Use minimum-size encoding
+      if value >= Int8::MIN && value <= Int8::MAX
+        header = Header.new(ElementType::SignedInt8, tag)
+        new(header, value.to_i8)
+      else
+        header = Header.new(ElementType::SignedInt16, tag)
+        new(header, value)
+      end
     end
 
     def self.new(value : Int32, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil) : Any
-      header = Header.new(ElementType::SignedInt32, tag)
-      new(header, value)
+      # Use minimum-size encoding
+      if value >= Int8::MIN && value <= Int8::MAX
+        header = Header.new(ElementType::SignedInt8, tag)
+        new(header, value.to_i8)
+      elsif value >= Int16::MIN && value <= Int16::MAX
+        header = Header.new(ElementType::SignedInt16, tag)
+        new(header, value.to_i16)
+      else
+        header = Header.new(ElementType::SignedInt32, tag)
+        new(header, value)
+      end
     end
 
     def self.new(value : Int64, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil) : Any
-      header = Header.new(ElementType::SignedInt64, tag)
-      new(header, value)
+      # Use minimum-size encoding
+      if value >= Int8::MIN && value <= Int8::MAX
+        header = Header.new(ElementType::SignedInt8, tag)
+        new(header, value.to_i8)
+      elsif value >= Int16::MIN && value <= Int16::MAX
+        header = Header.new(ElementType::SignedInt16, tag)
+        new(header, value.to_i16)
+      elsif value >= Int32::MIN && value <= Int32::MAX
+        header = Header.new(ElementType::SignedInt32, tag)
+        new(header, value.to_i32)
+      else
+        header = Header.new(ElementType::SignedInt64, tag)
+        new(header, value)
+      end
     end
 
+    # Unsigned integers - use minimum-size encoding
     def self.new(value : UInt8, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil) : Any
       header = Header.new(ElementType::UnsignedInt8, tag)
       new(header, value)
     end
 
     def self.new(value : UInt16, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil) : Any
-      header = Header.new(ElementType::UnsignedInt16, tag)
-      new(header, value)
+      # Use minimum-size encoding
+      if value <= UInt8::MAX
+        header = Header.new(ElementType::UnsignedInt8, tag)
+        new(header, value.to_u8)
+      else
+        header = Header.new(ElementType::UnsignedInt16, tag)
+        new(header, value)
+      end
     end
 
     def self.new(value : UInt32, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil) : Any
-      header = Header.new(ElementType::UnsignedInt32, tag)
-      new(header, value)
+      # Use minimum-size encoding
+      if value <= UInt8::MAX
+        header = Header.new(ElementType::UnsignedInt8, tag)
+        new(header, value.to_u8)
+      elsif value <= UInt16::MAX
+        header = Header.new(ElementType::UnsignedInt16, tag)
+        new(header, value.to_u16)
+      else
+        header = Header.new(ElementType::UnsignedInt32, tag)
+        new(header, value)
+      end
     end
 
     def self.new(value : UInt64, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil) : Any
-      header = Header.new(ElementType::UnsignedInt64, tag)
-      new(header, value)
+      # Use minimum-size encoding
+      if value <= UInt8::MAX
+        header = Header.new(ElementType::UnsignedInt8, tag)
+        new(header, value.to_u8)
+      elsif value <= UInt16::MAX
+        header = Header.new(ElementType::UnsignedInt16, tag)
+        new(header, value.to_u16)
+      elsif value <= UInt32::MAX
+        header = Header.new(ElementType::UnsignedInt32, tag)
+        new(header, value.to_u32)
+      else
+        header = Header.new(ElementType::UnsignedInt64, tag)
+        new(header, value)
+      end
     end
 
     def self.new(value : Float32, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil) : Any

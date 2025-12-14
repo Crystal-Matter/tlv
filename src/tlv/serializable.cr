@@ -42,6 +42,7 @@ module TLV
                 {% type = ivar.type %}
                 {% optional = ann[:optional] != false && ivar.type.nilable? %}
                 {% has_default = ivar.has_default_value? %}
+                {% is_tuple = type.name.starts_with?("Tuple(") || (type.union? && type.union_types.any? { |t| t.name.starts_with?("Tuple(") }) %}
 
                 {% # Determine the lookup key for the structure hash
  lookup_key = if tag.is_a?(NumberLiteral)
@@ -58,13 +59,21 @@ module TLV
 
                 {% if optional %}
                   if %found{ivar.name}
-                    @{{ ivar.name }} = ::TLV::Serializable.deserialize_value(%found{ivar.name}.not_nil!, {{ type.id }})
+                    {% if is_tuple %}
+                      @{{ ivar.name }} = ::TLV::Serializable.deserialize_tuple(%found{ivar.name}.not_nil!, {{ type.id }})
+                    {% else %}
+                      @{{ ivar.name }} = ::TLV::Serializable.deserialize_value(%found{ivar.name}.not_nil!, {{ type.id }})
+                    {% end %}
                   else
                     @{{ ivar.name }} = nil
                   end
                 {% elsif has_default %}
                   if %found{ivar.name}
-                    @{{ ivar.name }} = ::TLV::Serializable.deserialize_value(%found{ivar.name}.not_nil!, {{ type.id }})
+                    {% if is_tuple %}
+                      @{{ ivar.name }} = ::TLV::Serializable.deserialize_tuple(%found{ivar.name}.not_nil!, {{ type.id }})
+                    {% else %}
+                      @{{ ivar.name }} = ::TLV::Serializable.deserialize_value(%found{ivar.name}.not_nil!, {{ type.id }})
+                    {% end %}
                   else
                     @{{ ivar.name }} = {{ ivar.default_value }}
                   end
@@ -73,7 +82,11 @@ module TLV
                   if %any{ivar.name}.nil?
                     raise "Missing required TLV field: {{ ivar.name }} (tag {{ lookup_key }})"
                   end
-                  @{{ ivar.name }} = ::TLV::Serializable.deserialize_value(%any{ivar.name}.not_nil!, {{ type.id }})
+                  {% if is_tuple %}
+                    @{{ ivar.name }} = ::TLV::Serializable.deserialize_tuple(%any{ivar.name}.not_nil!, {{ type.id }})
+                  {% else %}
+                    @{{ ivar.name }} = ::TLV::Serializable.deserialize_value(%any{ivar.name}.not_nil!, {{ type.id }})
+                  {% end %}
                 {% end %}
               {% end %}
             {% end %}
@@ -90,7 +103,11 @@ module TLV
               {% ann = ivar.annotation(::TLV::Field) %}
               {% if ann %}
                 {% tag = ann[:tag] %}
+                {% type = ivar.type %}
                 {% optional = ann[:optional] != false && ivar.type.nilable? %}
+                {% container = ann[:container] %}
+                {% is_tuple = type.name.starts_with?("Tuple(") || (type.union? && type.union_types.any? { |t| t.name.starts_with?("Tuple(") }) %}
+                {% is_array = type.name.starts_with?("Array(") || (type.union? && type.union_types.any? { |t| t.name.starts_with?("Array(") }) %}
 
                 {% # Determine the tag format (used for both hash key and TLV::Any tag)
  if tag.is_a?(NumberLiteral)
@@ -105,10 +122,26 @@ module TLV
 
                 {% if optional %}
                   unless %value{ivar.name}.nil?
-                    %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }})
+                    {% if is_tuple %}
+                      # Tuple: default to list, use array if container: :array
+                      %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_tuple(%value{ivar.name}, {{ type.id }}, {{ tag_value }}, {{ container == :array }})
+                    {% elsif is_array && container == :list %}
+                      # Array with container: :list - force list format
+                      %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_array_as_list(%value{ivar.name}, {{ tag_value }})
+                    {% else %}
+                      %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }})
+                    {% end %}
                   end
                 {% else %}
-                  %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }})
+                  {% if is_tuple %}
+                    # Tuple: default to list, use array if container: :array
+                    %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_tuple(%value{ivar.name}, {{ type.id }}, {{ tag_value }}, {{ container == :array }})
+                  {% elsif is_array && container == :list %}
+                    # Array with container: :list - force list format
+                    %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_array_as_list(%value{ivar.name}, {{ tag_value }})
+                  {% else %}
+                    %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }})
+                  {% end %}
                 {% end %}
               {% end %}
             {% end %}
@@ -133,15 +166,36 @@ module TLV
     end
 
     def self.deserialize_value(any : TLV::Any, type : Int16.class) : Int16
-      any.as_i16
+      # Support widening from smaller integer types
+      v = any.value
+      case v
+      when Int8  then v.to_i16
+      when Int16 then v
+      else            any.as_i16
+      end
     end
 
     def self.deserialize_value(any : TLV::Any, type : Int32.class) : Int32
-      any.as_i32
+      # Support widening from smaller integer types
+      v = any.value
+      case v
+      when Int8  then v.to_i32
+      when Int16 then v.to_i32
+      when Int32 then v
+      else            any.as_i32
+      end
     end
 
     def self.deserialize_value(any : TLV::Any, type : Int64.class) : Int64
-      any.as_i64
+      # Support widening from smaller integer types
+      v = any.value
+      case v
+      when Int8  then v.to_i64
+      when Int16 then v.to_i64
+      when Int32 then v.to_i64
+      when Int64 then v
+      else            any.as_i64
+      end
     end
 
     def self.deserialize_value(any : TLV::Any, type : UInt8.class) : UInt8
@@ -149,15 +203,36 @@ module TLV
     end
 
     def self.deserialize_value(any : TLV::Any, type : UInt16.class) : UInt16
-      any.as_u16
+      # Support widening from smaller integer types
+      v = any.value
+      case v
+      when UInt8  then v.to_u16
+      when UInt16 then v
+      else             any.as_u16
+      end
     end
 
     def self.deserialize_value(any : TLV::Any, type : UInt32.class) : UInt32
-      any.as_u32
+      # Support widening from smaller integer types
+      v = any.value
+      case v
+      when UInt8  then v.to_u32
+      when UInt16 then v.to_u32
+      when UInt32 then v
+      else             any.as_u32
+      end
     end
 
     def self.deserialize_value(any : TLV::Any, type : UInt64.class) : UInt64
-      any.as_u64
+      # Support widening from smaller integer types
+      v = any.value
+      case v
+      when UInt8  then v.to_u64
+      when UInt16 then v.to_u64
+      when UInt32 then v.to_u64
+      when UInt64 then v
+      else             any.as_u64
+      end
     end
 
     def self.deserialize_value(any : TLV::Any, type : Float32.class) : Float32
@@ -196,10 +271,21 @@ module TLV
       {% end %}
     end
 
-    # Handle Arrays - elements are stored as TLV List
+    # Handle Arrays - elements are stored as TLV List/Array
     def self.deserialize_value(any : TLV::Any, type : Array(T).class) : Array(T) forall T
       list = any.as_list
       list.map { |elem| deserialize_value(elem, T) }
+    end
+
+    # Handle Tuples - elements are stored as TLV List
+    macro deserialize_tuple(any, tuple_type)
+      %list = {{ any }}.as_list
+      {% types = tuple_type.type_vars %}
+      {
+        {% for type, index in types %}
+          ::TLV::Serializable.deserialize_value(%list[{{ index }}], {{ type }}),
+        {% end %}
+      }
     end
 
     # Helper methods for serialization
@@ -274,13 +360,32 @@ module TLV
       {% end %}
     end
 
-    # Handle Arrays
+    # Handle Arrays - default to TLV Array
     def self.serialize_value(value : Array(T), tag) : TLV::Any forall T
       list = TLV::List.new
       value.each do |elem|
-        list << serialize_value(elem, nil) # Array elements are anonymous
+        list << serialize_value(elem, nil) # Elements are anonymous
       end
       TLV::Any.new(list, tag, as_array: true)
+    end
+
+    # Handle Arrays - serialize as TLV List (heterogeneous format)
+    def self.serialize_array_as_list(value : Array(T), tag) : TLV::Any forall T
+      list = TLV::List.new
+      value.each do |elem|
+        list << serialize_value(elem, nil) # Elements are anonymous
+      end
+      TLV::Any.new(list, tag, as_array: false)
+    end
+
+    # Handle Tuples - serialize each element, default to TLV List
+    macro serialize_tuple(value, tuple_type, tag, as_array = false)
+      %list = TLV::List.new
+      {% types = tuple_type.type_vars %}
+      {% for i in 0...types.size %}
+        %list << ::TLV::Serializable.serialize_value({{ value }}[{{ i }}], nil)
+      {% end %}
+      TLV::Any.new(%list, {{ tag }}, as_array: {{ as_array }})
     end
   end
 end

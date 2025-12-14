@@ -153,6 +153,29 @@ class WithProfileTags
   property vendor : UInt32
 end
 
+class WithTuple
+  include TLV::Serializable
+
+  @[TLV::Field(tag: 1)]
+  property items : Tuple(UInt8, String, UInt16)
+end
+
+class WithForcedArray
+  include TLV::Serializable
+
+  # Tuple serialized as TLV Array (homogeneous format)
+  @[TLV::Field(tag: 1, container: :array)]
+  property items : Tuple(UInt8, UInt8, UInt8)
+end
+
+class WithForcedList
+  include TLV::Serializable
+
+  # Array serialized as TLV List (heterogeneous format)
+  @[TLV::Field(tag: 1, container: :list)]
+  property items : Array(UInt8)
+end
+
 describe TLV::Serializable do
   describe "basic serialization" do
     it "serializes and deserializes a simple class" do
@@ -692,6 +715,146 @@ describe TLV::Serializable do
 
       # Verify the structure contains the right tags
       any.header.element_type.should eq(TLV::ElementType::Structure)
+    end
+  end
+
+  describe "tuples" do
+    it "deserializes tuple from TLV list" do
+      bytes = Bytes[
+        0x15,                                     # Structure start
+        0x37, 0x01,                               # Tag 1 = list start
+        0x04, 0x2A,                               # Anonymous UInt8: 42
+        0x0C, 0x05, 0x48, 0x65, 0x6C, 0x6C, 0x6F, # Anonymous String: "Hello"
+        0x05, 0x39, 0x30,                         # Anonymous UInt16: 12345
+        0x18,                                     # List end
+        0x18,                                     # Structure end
+      ]
+
+      obj = WithTuple.from_slice(bytes)
+      obj.items[0].should eq(42_u8)
+      obj.items[1].should eq("Hello")
+      obj.items[2].should eq(12345_u16)
+    end
+
+    it "serializes tuple to TLV list" do
+      bytes = Bytes[
+        0x15,                                     # Structure start
+        0x37, 0x01,                               # Tag 1 = list start
+        0x04, 0x0A,                               # Anonymous UInt8: 10
+        0x0C, 0x05, 0x57, 0x6F, 0x72, 0x6C, 0x64, # Anonymous String: "World"
+        0x05, 0x01, 0x00,                         # Anonymous UInt16: 1
+        0x18,                                     # List end
+        0x18,                                     # Structure end
+      ]
+
+      obj = WithTuple.from_slice(bytes)
+      any = obj.to_tlv
+
+      # Verify the tuple is serialized as a list (not array)
+      list_any = any[1_u8]
+      list_any.header.element_type.should eq(TLV::ElementType::List)
+    end
+
+    it "round-trips tuple" do
+      bytes = Bytes[
+        0x15,                               # Structure start
+        0x37, 0x01,                         # Tag 1 = list start
+        0x04, 0xFF,                         # Anonymous UInt8: 255
+        0x0C, 0x04, 0x54, 0x65, 0x73, 0x74, # Anonymous String: "Test"
+        0x05, 0xE8, 0x03,                   # Anonymous UInt16: 1000
+        0x18,                               # List end
+        0x18,                               # Structure end
+      ]
+
+      obj = WithTuple.from_slice(bytes)
+      output = obj.to_slice
+      parsed = WithTuple.from_slice(output)
+
+      parsed.items[0].should eq(255_u8)
+      parsed.items[1].should eq("Test")
+      parsed.items[2].should eq(1000_u16)
+    end
+  end
+
+  describe "container annotation" do
+    it "serializes tuple as array with container: :array" do
+      bytes = Bytes[
+        0x15,       # Structure start
+        0x36, 0x01, # Tag 1 = array start (0x36 for context + array)
+        0x04, 0x01, # Anonymous UInt8: 1
+        0x04, 0x02, # Anonymous UInt8: 2
+        0x04, 0x03, # Anonymous UInt8: 3
+        0x18,       # Array end
+        0x18,       # Structure end
+      ]
+
+      obj = WithForcedArray.from_slice(bytes)
+      obj.items[0].should eq(1_u8)
+      obj.items[1].should eq(2_u8)
+      obj.items[2].should eq(3_u8)
+
+      # Verify it serializes back as an array
+      any = obj.to_tlv
+      array_any = any[1_u8]
+      array_any.header.element_type.should eq(TLV::ElementType::Array)
+    end
+
+    it "round-trips tuple with container: :array" do
+      bytes = Bytes[
+        0x15,       # Structure start
+        0x36, 0x01, # Tag 1 = array start
+        0x04, 0x0A, # Anonymous UInt8: 10
+        0x04, 0x14, # Anonymous UInt8: 20
+        0x04, 0x1E, # Anonymous UInt8: 30
+        0x18,       # Array end
+        0x18,       # Structure end
+      ]
+
+      obj = WithForcedArray.from_slice(bytes)
+      output = obj.to_slice
+      parsed = WithForcedArray.from_slice(output)
+
+      parsed.items[0].should eq(10_u8)
+      parsed.items[1].should eq(20_u8)
+      parsed.items[2].should eq(30_u8)
+    end
+
+    it "serializes array as list with container: :list" do
+      bytes = Bytes[
+        0x15,       # Structure start
+        0x36, 0x01, # Tag 1 = array start (input can be array)
+        0x04, 0x01, # Anonymous UInt8: 1
+        0x04, 0x02, # Anonymous UInt8: 2
+        0x04, 0x03, # Anonymous UInt8: 3
+        0x18,       # Array end
+        0x18,       # Structure end
+      ]
+
+      obj = WithForcedList.from_slice(bytes)
+      obj.items.should eq([1_u8, 2_u8, 3_u8])
+
+      # Verify it serializes as a list (not array)
+      any = obj.to_tlv
+      list_any = any[1_u8]
+      list_any.header.element_type.should eq(TLV::ElementType::List)
+    end
+
+    it "round-trips array with container: :list" do
+      bytes = Bytes[
+        0x15,       # Structure start
+        0x37, 0x01, # Tag 1 = list start
+        0x04, 0x05, # Anonymous UInt8: 5
+        0x04, 0x06, # Anonymous UInt8: 6
+        0x04, 0x07, # Anonymous UInt8: 7
+        0x18,       # List end
+        0x18,       # Structure end
+      ]
+
+      obj = WithForcedList.from_slice(bytes)
+      output = obj.to_slice
+      parsed = WithForcedList.from_slice(output)
+
+      parsed.items.should eq([5_u8, 6_u8, 7_u8])
     end
   end
 end

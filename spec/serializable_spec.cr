@@ -176,6 +176,35 @@ class WithForcedList
   property items : Array(UInt8)
 end
 
+class WithUnion
+  include TLV::Serializable
+
+  @[TLV::Field(tag: 1)]
+  property id : UInt32
+
+  # Union type - can be either String or UInt32
+  @[TLV::Field(tag: 2)]
+  property message : String | UInt32
+end
+
+class WithOptionalUnion
+  include TLV::Serializable
+
+  @[TLV::Field(tag: 1)]
+  property id : UInt32
+
+  # Optional union type
+  @[TLV::Field(tag: 2)]
+  property data : String | UInt32 | Nil
+end
+
+class WithMultiUnion
+  include TLV::Serializable
+
+  @[TLV::Field(tag: 1)]
+  property value : UInt8 | UInt16 | UInt32 | Int8 | Int16 | Int32 | String | Bool
+end
+
 describe TLV::Serializable do
   describe "basic serialization" do
     it "serializes and deserializes a simple class" do
@@ -989,6 +1018,145 @@ describe TLV::Serializable do
       obj.items[0].should eq(42_u8)
       obj.items[1].should eq("Hello")
       obj.items[2].should eq(12345_u16)
+    end
+  end
+
+  describe "union types" do
+    it "deserializes union type with String value" do
+      bytes = Bytes[
+        0x15,                                           # Structure start
+        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00,             # Tag 1, UInt32 42
+        0x2C, 0x02, 0x05, 0x68, 0x65, 0x6C, 0x6C, 0x6F, # Tag 2, String "hello"
+        0x18,                                           # Structure end
+      ]
+
+      obj = WithUnion.from_slice(bytes)
+      obj.id.should eq(42_u32)
+      obj.message.should eq("hello")
+      obj.message.should be_a(String)
+    end
+
+    it "deserializes union type with UInt32 value" do
+      bytes = Bytes[
+        0x15,                               # Structure start
+        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00, # Tag 1, UInt32 42
+        0x26, 0x02, 0x64, 0x00, 0x00, 0x00, # Tag 2, UInt32 100
+        0x18,                               # Structure end
+      ]
+
+      obj = WithUnion.from_slice(bytes)
+      obj.id.should eq(42_u32)
+      obj.message.should eq(100_u32)
+      obj.message.should be_a(UInt32)
+    end
+
+    it "round-trips union type with String value" do
+      bytes = Bytes[
+        0x15,                                           # Structure start
+        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00,             # Tag 1, UInt32 42
+        0x2C, 0x02, 0x05, 0x68, 0x65, 0x6C, 0x6C, 0x6F, # Tag 2, String "hello"
+        0x18,                                           # Structure end
+      ]
+
+      obj = WithUnion.from_slice(bytes)
+      output = obj.to_slice
+      parsed = WithUnion.from_slice(output)
+      parsed.id.should eq(42_u32)
+      parsed.message.should eq("hello")
+    end
+
+    it "round-trips union type with UInt32 value" do
+      bytes = Bytes[
+        0x15,                               # Structure start
+        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00, # Tag 1, UInt32 42
+        0x26, 0x02, 0x64, 0x00, 0x00, 0x00, # Tag 2, UInt32 100
+        0x18,                               # Structure end
+      ]
+
+      obj = WithUnion.from_slice(bytes)
+      output = obj.to_slice
+      parsed = WithUnion.from_slice(output)
+      parsed.id.should eq(42_u32)
+      parsed.message.should eq(100_u32)
+    end
+
+    it "handles optional union with String value" do
+      bytes = Bytes[
+        0x15,                                     # Structure start
+        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00,       # Tag 1, UInt32 42
+        0x2C, 0x02, 0x04, 0x74, 0x65, 0x73, 0x74, # Tag 2, String "test"
+        0x18,                                     # Structure end
+      ]
+
+      obj = WithOptionalUnion.from_slice(bytes)
+      obj.id.should eq(42_u32)
+      obj.data.should eq("test")
+    end
+
+    it "handles optional union with nil value (missing field)" do
+      bytes = Bytes[
+        0x15,                               # Structure start
+        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00, # Tag 1, UInt32 42
+        0x18,                               # Structure end
+      ]
+
+      obj = WithOptionalUnion.from_slice(bytes)
+      obj.id.should eq(42_u32)
+      obj.data.should be_nil
+    end
+
+    it "handles optional union with explicit null" do
+      bytes = Bytes[
+        0x15,                               # Structure start
+        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00, # Tag 1, UInt32 42
+        0x34, 0x02,                         # Tag 2, Null
+        0x18,                               # Structure end
+      ]
+
+      obj = WithOptionalUnion.from_slice(bytes)
+      obj.id.should eq(42_u32)
+      obj.data.should be_nil
+    end
+
+    it "handles multi-type union with various types" do
+      # Test with UInt8
+      bytes_u8 = Bytes[0x15, 0x24, 0x01, 0x2A, 0x18] # Tag 1, UInt8 42
+      obj_u8 = WithMultiUnion.from_slice(bytes_u8)
+      obj_u8.value.should eq(42_u8)
+
+      # Test with String
+      bytes_str = Bytes[0x15, 0x2C, 0x01, 0x02, 0x68, 0x69, 0x18] # Tag 1, String "hi"
+      obj_str = WithMultiUnion.from_slice(bytes_str)
+      obj_str.value.should eq("hi")
+
+      # Test with Bool true
+      bytes_true = Bytes[0x15, 0x29, 0x01, 0x18] # Tag 1, true
+      obj_true = WithMultiUnion.from_slice(bytes_true)
+      obj_true.value.should eq(true)
+
+      # Test with Bool false
+      bytes_false = Bytes[0x15, 0x28, 0x01, 0x18] # Tag 1, false
+      obj_false = WithMultiUnion.from_slice(bytes_false)
+      obj_false.value.should eq(false)
+
+      # Test with Int8 negative
+      bytes_i8 = Bytes[0x15, 0x20, 0x01, 0xD6, 0x18] # Tag 1, Int8 -42
+      obj_i8 = WithMultiUnion.from_slice(bytes_i8)
+      obj_i8.value.should eq(-42_i8)
+    end
+
+    it "deserializes union from IO" do
+      bytes = Bytes[
+        0x15,                                           # Structure start
+        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00,             # Tag 1, UInt32 42
+        0x2C, 0x02, 0x05, 0x68, 0x65, 0x6C, 0x6C, 0x6F, # Tag 2, String "hello"
+        0x18,                                           # Structure end
+      ]
+
+      io = IO::Memory.new(bytes)
+      obj = io.read_bytes(WithUnion)
+      obj.id.should eq(42_u32)
+      obj.message.should eq("hello")
     end
   end
 end

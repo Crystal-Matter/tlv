@@ -299,15 +299,91 @@ module TLV
       any
     end
 
-    # Handle Serializable types (catch-all with macro check)
+    # Handle Serializable types and union types (catch-all with macro check)
     def self.deserialize_value(any : TLV::Any, type : T.class) : T forall T
-      {% if T.nilable? %}
-        {% non_nil_type = T.union_types.reject(&.==(Nil)).first %}
-        if any.header.element_type.null?
-          nil
-        else
-          deserialize_value(any, {{ non_nil_type }})
-        end
+      {% if T.union? %}
+        {% union_types = T.union_types %}
+        {% has_nil = union_types.any?(&.==(Nil)) %}
+        {% non_nil_types = union_types.reject(&.==(Nil)) %}
+
+        # Handle null element type for nilable unions
+        {% if has_nil %}
+          if any.header.element_type.null?
+            return nil
+          end
+        {% end %}
+
+        # Try to match the TLV element type to one of the union types
+        # Note: TLV uses minimum-size encoding, so we need to handle integer widening
+        element_type = any.header.element_type
+        {% for ut in non_nil_types %}
+          {% if ut == Bool %}
+            if element_type.boolean_true? || element_type.boolean_false?
+              return any.as_bool
+            end
+          {% elsif ut == String %}
+            if element_type.utf8_string1? || element_type.utf8_string2? || element_type.utf8_string4? || element_type.utf8_string8?
+              return any.as_s
+            end
+          {% elsif ut == Bytes %}
+            if element_type.byte_string1? || element_type.byte_string2? || element_type.byte_string4? || element_type.byte_string8?
+              return any.as_bytes
+            end
+          {% elsif ut == Int8 %}
+            if element_type.signed_int8?
+              return any.as_i8
+            end
+          {% elsif ut == Int16 %}
+            # Accept Int8 or Int16 for Int16 target (widening)
+            if element_type.signed_int8? || element_type.signed_int16?
+              return any.as_i16
+            end
+          {% elsif ut == Int32 %}
+            # Accept Int8, Int16, or Int32 for Int32 target (widening)
+            if element_type.signed_int8? || element_type.signed_int16? || element_type.signed_int32?
+              return any.as_i32
+            end
+          {% elsif ut == Int64 %}
+            # Accept any signed int for Int64 target (widening)
+            if element_type.signed_int8? || element_type.signed_int16? || element_type.signed_int32? || element_type.signed_int64?
+              return any.as_i64
+            end
+          {% elsif ut == UInt8 %}
+            if element_type.unsigned_int8?
+              return any.as_u8
+            end
+          {% elsif ut == UInt16 %}
+            # Accept UInt8 or UInt16 for UInt16 target (widening)
+            if element_type.unsigned_int8? || element_type.unsigned_int16?
+              return any.as_u16
+            end
+          {% elsif ut == UInt32 %}
+            # Accept UInt8, UInt16, or UInt32 for UInt32 target (widening)
+            if element_type.unsigned_int8? || element_type.unsigned_int16? || element_type.unsigned_int32?
+              return any.as_u32
+            end
+          {% elsif ut == UInt64 %}
+            # Accept any unsigned int for UInt64 target (widening)
+            if element_type.unsigned_int8? || element_type.unsigned_int16? || element_type.unsigned_int32? || element_type.unsigned_int64?
+              return any.as_u64
+            end
+          {% elsif ut == Float32 %}
+            if element_type.float32?
+              return any.as_f32
+            end
+          {% elsif ut == Float64 %}
+            if element_type.float64?
+              return any.as_f64
+            end
+          {% elsif ut < ::TLV::Serializable %}
+            if element_type.structure?
+              return {{ ut }}.from_tlv(any)
+            end
+          {% end %}
+        {% end %}
+
+        # If no type matched, raise an error
+        raise "Cannot deserialize TLV element type #{element_type} to union type #{T}"
       {% elsif T < ::TLV::Serializable %}
         T.from_tlv(any)
       {% else %}

@@ -1,9 +1,12 @@
 name: tlv
-version: 0.1.0
+version: 1.0.0
+
+dependencies:
+  bindata:
+    github: spider-gazelle/bindata
+    version: ~> 2.1
 
 authors:
-  - Giorgi Kavrelishvili <giorgi.kavrelishvili@pm.me>
-
-crystal: 1.9.2
+  - Stephen von Takach <steve@vontaka.ch>
 
 license: MIT

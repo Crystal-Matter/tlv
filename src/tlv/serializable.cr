@@ -5,6 +5,12 @@ module TLV
   annotation Field
   end
 
+  # Annotation to indicate that a struct should be serialized as a TLV List
+  # instead of a Structure. Both have context-tagged elements, but use different
+  # container types (0x17 for List vs 0x15 for Structure).
+  annotation ListFormat
+  end
+
   module Serializable
     macro included
       def self.from_io(io : IO, format : IO::ByteFormat = IO::ByteFormat::LittleEndian)
@@ -33,7 +39,29 @@ module TLV
       def initialize(any : TLV::Any)
         {% verbatim do %}
           {% begin %}
-            %structure = any.value.as?(TLV::Structure)
+            {% is_list_format = @type.annotation(::TLV::ListFormat) %}
+
+            # For ListForm types, we need to handle List format (Array(TLV::Any) with tags)
+            # For regular types, we expect Structure format (Hash)
+            {% if is_list_format %}
+              # ListForm: accept either List or Structure (for compatibility)
+              %list = any.value.as?(TLV::List)
+              %structure : TLV::Structure? = nil
+              if %list
+                # Convert list to structure-like hash for field lookup
+                %structure = TLV::Structure.new
+                %list.each do |elem|
+                  if tag = elem.header.ids
+                    %structure[tag] = elem
+                  end
+                end
+              else
+                %structure = any.value.as?(TLV::Structure)
+              end
+            {% else %}
+              %structure = any.value.as?(TLV::Structure)
+            {% end %}
+
             if %structure.nil?
               %actual_type = any.value.class.name
               raise ::TLV::DeserializationError.new(
@@ -141,7 +169,14 @@ module TLV
       def to_tlv(outer_tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil) : TLV::Any
         {% verbatim do %}
           {% begin %}
-            %structure = TLV::Structure.new
+            {% is_list_format = @type.annotation(::TLV::ListFormat) %}
+
+            {% if is_list_format %}
+              # ListForm: serialize as a List with context-tagged elements
+              %list = TLV::List.new
+            {% else %}
+              %structure = TLV::Structure.new
+            {% end %}
 
             {% for ivar in @type.instance_vars %}
               {% ann = ivar.annotation(::TLV::Field) %}
@@ -168,29 +203,57 @@ module TLV
                   unless %value{ivar.name}.nil?
                     {% if is_tuple %}
                       # Tuple: default to list, use array if container: :array
-                      %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_tuple(%value{ivar.name}, {{ type.id }}, {{ tag_value }}, {{ container == :array }})
+                      {% if is_list_format %}
+                        %list << ::TLV::Serializable.serialize_tuple(%value{ivar.name}, {{ type.id }}, {{ tag_value }}, {{ container == :array }})
+                      {% else %}
+                        %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_tuple(%value{ivar.name}, {{ type.id }}, {{ tag_value }}, {{ container == :array }})
+                      {% end %}
                     {% elsif is_array && container == :list %}
                       # Array with container: :list - force list format
-                      %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_array_as_list(%value{ivar.name}, {{ tag_value }})
+                      {% if is_list_format %}
+                        %list << ::TLV::Serializable.serialize_array_as_list(%value{ivar.name}, {{ tag_value }})
+                      {% else %}
+                        %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_array_as_list(%value{ivar.name}, {{ tag_value }})
+                      {% end %}
                     {% else %}
-                      %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }})
+                      {% if is_list_format %}
+                        %list << ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }})
+                      {% else %}
+                        %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }})
+                      {% end %}
                     {% end %}
                   end
                 {% else %}
                   {% if is_tuple %}
                     # Tuple: default to list, use array if container: :array
-                    %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_tuple(%value{ivar.name}, {{ type.id }}, {{ tag_value }}, {{ container == :array }})
+                    {% if is_list_format %}
+                      %list << ::TLV::Serializable.serialize_tuple(%value{ivar.name}, {{ type.id }}, {{ tag_value }}, {{ container == :array }})
+                    {% else %}
+                      %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_tuple(%value{ivar.name}, {{ type.id }}, {{ tag_value }}, {{ container == :array }})
+                    {% end %}
                   {% elsif is_array && container == :list %}
                     # Array with container: :list - force list format
-                    %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_array_as_list(%value{ivar.name}, {{ tag_value }})
+                    {% if is_list_format %}
+                      %list << ::TLV::Serializable.serialize_array_as_list(%value{ivar.name}, {{ tag_value }})
+                    {% else %}
+                      %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_array_as_list(%value{ivar.name}, {{ tag_value }})
+                    {% end %}
                   {% else %}
-                    %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }})
+                    {% if is_list_format %}
+                      %list << ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }})
+                    {% else %}
+                      %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }})
+                    {% end %}
                   {% end %}
                 {% end %}
               {% end %}
             {% end %}
 
-            TLV::Any.new(%structure, outer_tag)
+            {% if is_list_format %}
+              TLV::Any.new(%list, outer_tag)
+            {% else %}
+              TLV::Any.new(%structure, outer_tag)
+            {% end %}
           {% end %}
         {% end %}
       end

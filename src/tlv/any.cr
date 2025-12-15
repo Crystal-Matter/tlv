@@ -452,9 +452,19 @@ module TLV
       end
     end
 
-    def self.new(value : UInt32, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil) : Any
-      # Use minimum-size encoding
-      if value <= UInt8::MAX
+    def self.new(value : UInt32, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil, *, force_size : Int32? = nil) : Any
+      if force_size == 4
+        # Force 4-byte encoding
+        header = Header.new(ElementType::UnsignedInt32, tag)
+        new(header, value)
+      elsif force_size == 2 && value <= UInt16::MAX
+        header = Header.new(ElementType::UnsignedInt16, tag)
+        new(header, value.to_u16)
+      elsif force_size == 1 && value <= UInt8::MAX
+        header = Header.new(ElementType::UnsignedInt8, tag)
+        new(header, value.to_u8)
+      elsif value <= UInt8::MAX
+        # Use minimum-size encoding
         header = Header.new(ElementType::UnsignedInt8, tag)
         new(header, value.to_u8)
       elsif value <= UInt16::MAX

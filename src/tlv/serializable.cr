@@ -480,6 +480,11 @@ module TLV
                             end
                 return {{ ut }}.from_value(int_value)
               end
+            {% elsif ut.name.starts_with?("Array(") %}
+              # Array types - check if the element is a list/array
+              if element_type.array? || element_type.list?
+                return deserialize_value(any, {{ ut }})
+              end
             {% end %}
           {% end %}
 

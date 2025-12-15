@@ -399,7 +399,10 @@ module TLV
           # Note: TLV uses minimum-size encoding, so we need to handle integer widening
           element_type = any.header.element_type
           {% for ut in non_nil_types %}
-            {% if ut == Bool %}
+            {% if ut == TLV::Any %}
+              # TLV::Any accepts any element type - return the value directly
+              return any
+            {% elsif ut == Bool %}
               if element_type.boolean_true? || element_type.boolean_false?
                 return any.as_bool
               end

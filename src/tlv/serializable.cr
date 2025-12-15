@@ -26,6 +26,10 @@ module TLV
         new(any)
       end
 
+      def self.from_tlv(data : Bytes)
+        from_slice(data : Bytes)
+      end
+
       def to_io(io : IO, format : IO::ByteFormat = IO::ByteFormat::LittleEndian) : Nil
         to_tlv.to_io(io, format)
       end
@@ -34,6 +38,10 @@ module TLV
         io = IO::Memory.new
         to_io(io)
         io.to_slice
+      end
+
+      def to_tlv : Bytes
+        to_slice
       end
 
       def initialize(any : TLV::Any)

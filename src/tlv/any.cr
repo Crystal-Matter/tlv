@@ -20,6 +20,10 @@ module TLV
       from_io(IO::Memory.new(bytes))
     end
 
+    def self.from_tlv(data : Bytes) : Any
+      from_slice(data : Bytes)
+    end
+
     # Write TLV element to IO
     def to_io(io : IO, format : IO::ByteFormat = IO::ByteFormat::LittleEndian) : Nil
       header.to_io(io)
@@ -31,6 +35,10 @@ module TLV
       io = IO::Memory.new
       to_io(io)
       io.to_slice
+    end
+
+    def to_tlv : Bytes
+      to_slice
     end
 
     # Read value based on element type

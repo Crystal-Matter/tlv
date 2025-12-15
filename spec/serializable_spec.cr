@@ -205,6 +205,24 @@ class WithMultiUnion
   property value : UInt8 | UInt16 | UInt32 | Int8 | Int16 | Int32 | String | Bool
 end
 
+class WithFixedSize
+  include TLV::Serializable
+
+  # Without fixed_size, small values use minimum encoding
+  @[TLV::Field(tag: 1)]
+  property normal_u32 : UInt32
+
+  # With fixed_size: true, always uses full 4-byte encoding
+  @[TLV::Field(tag: 2, fixed_size: true)]
+  property fixed_u32 : UInt32
+
+  @[TLV::Field(tag: 3)]
+  property normal_u16 : UInt16
+
+  @[TLV::Field(tag: 4, fixed_size: true)]
+  property fixed_u16 : UInt16
+end
+
 describe TLV::Serializable do
   describe "basic serialization" do
     it "serializes and deserializes a simple class" do
@@ -1157,6 +1175,94 @@ describe TLV::Serializable do
       obj = io.read_bytes(WithUnion)
       obj.id.should eq(42_u32)
       obj.message.should eq("hello")
+    end
+  end
+
+  describe "fixed_size annotation" do
+    it "uses minimum encoding without fixed_size" do
+      # Build a WithFixedSize object with small values
+      bytes = Bytes[
+        0x15,             # Structure start
+        0x24, 0x01, 0x05, # Tag 1, UInt8 5 (min encoded from UInt32)
+        0x24, 0x02, 0x05, # Tag 2, UInt8 5 (we'll check it re-encodes as full)
+        0x24, 0x03, 0x0A, # Tag 3, UInt8 10 (min encoded from UInt16)
+        0x24, 0x04, 0x0A, # Tag 4, UInt8 10 (we'll check it re-encodes as full)
+        0x18,             # Structure end
+      ]
+
+      obj = WithFixedSize.from_slice(bytes)
+      obj.normal_u32.should eq(5_u32)
+      obj.fixed_u32.should eq(5_u32)
+      obj.normal_u16.should eq(10_u16)
+      obj.fixed_u16.should eq(10_u16)
+
+      # Serialize and check the encoding
+      output = obj.to_slice
+
+      # Parse output to verify encoding
+      any = TLV::Any.from_slice(output)
+
+      # normal_u32 (tag 1) should use minimum encoding (UInt8)
+      any[1_u8].header.element_type.should eq(TLV::ElementType::UnsignedInt8)
+
+      # fixed_u32 (tag 2) should use full UInt32 encoding
+      any[2_u8].header.element_type.should eq(TLV::ElementType::UnsignedInt32)
+
+      # normal_u16 (tag 3) should use minimum encoding (UInt8)
+      any[3_u8].header.element_type.should eq(TLV::ElementType::UnsignedInt8)
+
+      # fixed_u16 (tag 4) should use full UInt16 encoding
+      any[4_u8].header.element_type.should eq(TLV::ElementType::UnsignedInt16)
+    end
+
+    it "round-trips fixed_size fields correctly" do
+      bytes = Bytes[
+        0x15,                               # Structure start
+        0x26, 0x01, 0x64, 0x00, 0x00, 0x00, # Tag 1, UInt32 100
+        0x26, 0x02, 0xC8, 0x00, 0x00, 0x00, # Tag 2, UInt32 200
+        0x25, 0x03, 0x2C, 0x01,             # Tag 3, UInt16 300
+        0x25, 0x04, 0x90, 0x01,             # Tag 4, UInt16 400
+        0x18,                               # Structure end
+      ]
+
+      obj = WithFixedSize.from_slice(bytes)
+      output = obj.to_slice
+      parsed = WithFixedSize.from_slice(output)
+
+      parsed.normal_u32.should eq(100_u32)
+      parsed.fixed_u32.should eq(200_u32)
+      parsed.normal_u16.should eq(300_u16)
+      parsed.fixed_u16.should eq(400_u16)
+    end
+
+    it "fixed_size encoding is correct byte-level" do
+      bytes = Bytes[
+        0x15,             # Structure start
+        0x24, 0x01, 0x01, # Tag 1, UInt8 1
+        0x24, 0x02, 0x01, # Tag 2, UInt8 1 (will re-encode as UInt32)
+        0x24, 0x03, 0x01, # Tag 3, UInt8 1
+        0x24, 0x04, 0x01, # Tag 4, UInt8 1 (will re-encode as UInt16)
+        0x18,             # Structure end
+      ]
+
+      obj = WithFixedSize.from_slice(bytes)
+      output = obj.to_slice
+
+      # Expected: tag 2 should be 5 bytes (control + tag + 4 value bytes)
+      # Expected: tag 4 should be 4 bytes (control + tag + 2 value bytes)
+      # Let's verify the fixed_u32 (tag 2) is encoded as UInt32
+      # Control byte for context tag + UInt32 = 0x26
+      # Tag = 0x02
+      # Value = 0x01 0x00 0x00 0x00
+
+      # Find tag 2 in output - it should be encoded as UInt32
+      # Structure: 0x15, then fields, then 0x18
+      io = IO::Memory.new(output)
+      any = TLV::Any.from_io(io)
+
+      # Get the raw bytes and verify tag 2 encoding
+      any[2_u8].value.should eq(1_u32)
+      any[2_u8].header.element_type.should eq(TLV::ElementType::UnsignedInt32)
     end
   end
 end

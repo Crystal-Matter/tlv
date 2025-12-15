@@ -185,6 +185,7 @@ module TLV
                 {% type = ivar.type %}
                 {% optional = ann[:optional] != false && ivar.type.nilable? %}
                 {% container = ann[:container] %}
+                {% fixed_size = ann[:fixed_size] == true %}
                 {% is_tuple = type.name.starts_with?("Tuple(") || (type.union? && type.union_types.any?(&.name.starts_with?("Tuple("))) %}
                 {% is_array = type.name.starts_with?("Array(") || (type.union? && type.union_types.any?(&.name.starts_with?("Array("))) %}
 
@@ -217,9 +218,9 @@ module TLV
                       {% end %}
                     {% else %}
                       {% if is_list_format %}
-                        %list << ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }})
+                        %list << ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }}, {{ fixed_size }})
                       {% else %}
-                        %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }})
+                        %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }}, {{ fixed_size }})
                       {% end %}
                     {% end %}
                   end
@@ -240,9 +241,9 @@ module TLV
                     {% end %}
                   {% else %}
                     {% if is_list_format %}
-                      %list << ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }})
+                      %list << ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }}, {{ fixed_size }})
                     {% else %}
-                      %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }})
+                      %structure[{{ tag_value }}] = ::TLV::Serializable.serialize_value(%value{ivar.name}, {{ tag_value }}, {{ fixed_size }})
                     {% end %}
                   {% end %}
                 {% end %}
@@ -505,70 +506,70 @@ module TLV
     end
 
     # Helper methods for serialization
-    def self.serialize_value(value : Nil, tag) : TLV::Any
+    def self.serialize_value(value : Nil, tag, fixed_size : Bool = false) : TLV::Any
       TLV::Any.new(value, tag)
     end
 
-    def self.serialize_value(value : Bool, tag) : TLV::Any
+    def self.serialize_value(value : Bool, tag, fixed_size : Bool = false) : TLV::Any
       TLV::Any.new(value, tag)
     end
 
-    def self.serialize_value(value : Int8, tag) : TLV::Any
+    def self.serialize_value(value : Int8, tag, fixed_size : Bool = false) : TLV::Any
       TLV::Any.new(value, tag)
     end
 
-    def self.serialize_value(value : Int16, tag) : TLV::Any
+    def self.serialize_value(value : Int16, tag, fixed_size : Bool = false) : TLV::Any
+      TLV::Any.new(value, tag, fixed_size: fixed_size)
+    end
+
+    def self.serialize_value(value : Int32, tag, fixed_size : Bool = false) : TLV::Any
+      TLV::Any.new(value, tag, fixed_size: fixed_size)
+    end
+
+    def self.serialize_value(value : Int64, tag, fixed_size : Bool = false) : TLV::Any
+      TLV::Any.new(value, tag, fixed_size: fixed_size)
+    end
+
+    def self.serialize_value(value : UInt8, tag, fixed_size : Bool = false) : TLV::Any
       TLV::Any.new(value, tag)
     end
 
-    def self.serialize_value(value : Int32, tag) : TLV::Any
+    def self.serialize_value(value : UInt16, tag, fixed_size : Bool = false) : TLV::Any
+      TLV::Any.new(value, tag, fixed_size: fixed_size)
+    end
+
+    def self.serialize_value(value : UInt32, tag, fixed_size : Bool = false) : TLV::Any
+      TLV::Any.new(value, tag, fixed_size: fixed_size)
+    end
+
+    def self.serialize_value(value : UInt64, tag, fixed_size : Bool = false) : TLV::Any
+      TLV::Any.new(value, tag, fixed_size: fixed_size)
+    end
+
+    def self.serialize_value(value : Float32, tag, fixed_size : Bool = false) : TLV::Any
       TLV::Any.new(value, tag)
     end
 
-    def self.serialize_value(value : Int64, tag) : TLV::Any
+    def self.serialize_value(value : Float64, tag, fixed_size : Bool = false) : TLV::Any
       TLV::Any.new(value, tag)
     end
 
-    def self.serialize_value(value : UInt8, tag) : TLV::Any
+    def self.serialize_value(value : String, tag, fixed_size : Bool = false) : TLV::Any
       TLV::Any.new(value, tag)
     end
 
-    def self.serialize_value(value : UInt16, tag) : TLV::Any
+    def self.serialize_value(value : Bytes, tag, fixed_size : Bool = false) : TLV::Any
       TLV::Any.new(value, tag)
     end
 
-    def self.serialize_value(value : UInt32, tag) : TLV::Any
-      TLV::Any.new(value, tag)
-    end
-
-    def self.serialize_value(value : UInt64, tag) : TLV::Any
-      TLV::Any.new(value, tag)
-    end
-
-    def self.serialize_value(value : Float32, tag) : TLV::Any
-      TLV::Any.new(value, tag)
-    end
-
-    def self.serialize_value(value : Float64, tag) : TLV::Any
-      TLV::Any.new(value, tag)
-    end
-
-    def self.serialize_value(value : String, tag) : TLV::Any
-      TLV::Any.new(value, tag)
-    end
-
-    def self.serialize_value(value : Bytes, tag) : TLV::Any
-      TLV::Any.new(value, tag)
-    end
-
-    def self.serialize_value(value : TLV::Any, tag) : TLV::Any
+    def self.serialize_value(value : TLV::Any, tag, fixed_size : Bool = false) : TLV::Any
       # Re-tag the Any with the new tag
       header = TLV::Header.new(value.header.element_type, tag)
       TLV::Any.new(header, value.value)
     end
 
     # Handle Serializable types (catch-all)
-    def self.serialize_value(value : T, tag) : TLV::Any forall T
+    def self.serialize_value(value : T, tag, fixed_size : Bool = false) : TLV::Any forall T
       {% if T < ::TLV::Serializable %}
         value.to_tlv(tag)
       {% else %}
@@ -577,7 +578,7 @@ module TLV
     end
 
     # Handle Arrays - default to TLV Array
-    def self.serialize_value(value : Array(T), tag) : TLV::Any forall T
+    def self.serialize_value(value : Array(T), tag, fixed_size : Bool = false) : TLV::Any forall T
       list = TLV::List.new
       value.each do |elem|
         list << serialize_value(elem, nil) # Elements are anonymous

@@ -393,9 +393,12 @@ module TLV
       new(header, value)
     end
 
-    def self.new(value : Int16, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil) : Any
-      # Use minimum-size encoding
-      if value >= Int8::MIN && value <= Int8::MAX
+    def self.new(value : Int16, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil, *, fixed_size : Bool = false) : Any
+      if fixed_size
+        header = Header.new(ElementType::SignedInt16, tag)
+        new(header, value)
+      elsif value >= Int8::MIN && value <= Int8::MAX
+        # Use minimum-size encoding
         header = Header.new(ElementType::SignedInt8, tag)
         new(header, value.to_i8)
       else
@@ -404,9 +407,12 @@ module TLV
       end
     end
 
-    def self.new(value : Int32, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil) : Any
-      # Use minimum-size encoding
-      if value >= Int8::MIN && value <= Int8::MAX
+    def self.new(value : Int32, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil, *, fixed_size : Bool = false) : Any
+      if fixed_size
+        header = Header.new(ElementType::SignedInt32, tag)
+        new(header, value)
+      elsif value >= Int8::MIN && value <= Int8::MAX
+        # Use minimum-size encoding
         header = Header.new(ElementType::SignedInt8, tag)
         new(header, value.to_i8)
       elsif value >= Int16::MIN && value <= Int16::MAX
@@ -418,9 +424,12 @@ module TLV
       end
     end
 
-    def self.new(value : Int64, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil) : Any
-      # Use minimum-size encoding
-      if value >= Int8::MIN && value <= Int8::MAX
+    def self.new(value : Int64, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil, *, fixed_size : Bool = false) : Any
+      if fixed_size
+        header = Header.new(ElementType::SignedInt64, tag)
+        new(header, value)
+      elsif value >= Int8::MIN && value <= Int8::MAX
+        # Use minimum-size encoding
         header = Header.new(ElementType::SignedInt8, tag)
         new(header, value.to_i8)
       elsif value >= Int16::MIN && value <= Int16::MAX
@@ -441,9 +450,12 @@ module TLV
       new(header, value)
     end
 
-    def self.new(value : UInt16, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil) : Any
-      # Use minimum-size encoding
-      if value <= UInt8::MAX
+    def self.new(value : UInt16, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil, *, fixed_size : Bool = false) : Any
+      if fixed_size
+        header = Header.new(ElementType::UnsignedInt16, tag)
+        new(header, value)
+      elsif value <= UInt8::MAX
+        # Use minimum-size encoding
         header = Header.new(ElementType::UnsignedInt8, tag)
         new(header, value.to_u8)
       else
@@ -452,17 +464,10 @@ module TLV
       end
     end
 
-    def self.new(value : UInt32, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil, *, force_size : Int32? = nil) : Any
-      if force_size == 4
-        # Force 4-byte encoding
+    def self.new(value : UInt32, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil, *, fixed_size : Bool = false) : Any
+      if fixed_size
         header = Header.new(ElementType::UnsignedInt32, tag)
         new(header, value)
-      elsif force_size == 2 && value <= UInt16::MAX
-        header = Header.new(ElementType::UnsignedInt16, tag)
-        new(header, value.to_u16)
-      elsif force_size == 1 && value <= UInt8::MAX
-        header = Header.new(ElementType::UnsignedInt8, tag)
-        new(header, value.to_u8)
       elsif value <= UInt8::MAX
         # Use minimum-size encoding
         header = Header.new(ElementType::UnsignedInt8, tag)
@@ -476,9 +481,12 @@ module TLV
       end
     end
 
-    def self.new(value : UInt64, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil) : Any
-      # Use minimum-size encoding
-      if value <= UInt8::MAX
+    def self.new(value : UInt64, tag : Nil | UInt8 | {UInt16, UInt16} | {UInt16, UInt16, UInt16} = nil, *, fixed_size : Bool = false) : Any
+      if fixed_size
+        header = Header.new(ElementType::UnsignedInt64, tag)
+        new(header, value)
+      elsif value <= UInt8::MAX
+        # Use minimum-size encoding
         header = Header.new(ElementType::UnsignedInt8, tag)
         new(header, value.to_u8)
       elsif value <= UInt16::MAX

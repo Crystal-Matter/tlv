@@ -223,6 +223,80 @@ class WithFixedSize
   property fixed_u16 : UInt16
 end
 
+# Sized enum types for testing
+enum MessageType : UInt16
+  Command = 0x0100
+  Inquiry = 0x0110
+  Reply   = 0x0111
+end
+
+enum StatusCode : UInt8
+  Success = 0x00
+  Error   = 0x01
+  Pending = 0x02
+end
+
+enum Priority : Int32
+  Low    = -1
+  Normal =  0
+  High   =  1
+end
+
+class WithEnum
+  include TLV::Serializable
+
+  @[TLV::Field(tag: 1)]
+  property message_type : MessageType
+
+  @[TLV::Field(tag: 2)]
+  property status : StatusCode
+end
+
+class WithEnumAndData
+  include TLV::Serializable
+
+  @[TLV::Field(tag: 1)]
+  property id : UInt32
+
+  @[TLV::Field(tag: 2)]
+  property type : MessageType
+
+  @[TLV::Field(tag: 3)]
+  property name : String
+end
+
+class WithOptionalEnum
+  include TLV::Serializable
+
+  @[TLV::Field(tag: 1)]
+  property id : UInt32
+
+  @[TLV::Field(tag: 2)]
+  property status : StatusCode?
+end
+
+class WithSignedEnum
+  include TLV::Serializable
+
+  @[TLV::Field(tag: 1)]
+  property priority : Priority
+end
+
+class WithFixedSizeEnum
+  include TLV::Serializable
+
+  # With fixed_size: true, always uses full encoding for enum's underlying type
+  @[TLV::Field(tag: 1, fixed_size: true)]
+  property type : MessageType
+end
+
+class WithEnumOrString
+  include TLV::Serializable
+
+  @[TLV::Field(tag: 1)]
+  property value : MessageType | String
+end
+
 describe TLV::Serializable do
   describe "basic serialization" do
     it "serializes and deserializes a simple class" do
@@ -1263,6 +1337,261 @@ describe TLV::Serializable do
       # Get the raw bytes and verify tag 2 encoding
       any[2_u8].value.should eq(1_u32)
       any[2_u8].header.element_type.should eq(TLV::ElementType::UnsignedInt32)
+    end
+  end
+
+  describe "sized enum types" do
+    it "deserializes UInt16 enum" do
+      # MessageType::Command = 0x0100, MessageType::Reply = 0x0111
+      bytes = Bytes[
+        0x15,                   # Structure start
+        0x25, 0x01, 0x00, 0x01, # Tag 1, UInt16 0x0100 (Command)
+        0x24, 0x02, 0x00,       # Tag 2, UInt8 0x00 (Success)
+        0x18,                   # Structure end
+      ]
+
+      obj = WithEnum.from_slice(bytes)
+      obj.message_type.should eq(MessageType::Command)
+      obj.status.should eq(StatusCode::Success)
+    end
+
+    it "deserializes UInt8 enum" do
+      bytes = Bytes[
+        0x15,                   # Structure start
+        0x25, 0x01, 0x11, 0x01, # Tag 1, UInt16 0x0111 (Reply)
+        0x24, 0x02, 0x01,       # Tag 2, UInt8 0x01 (Error)
+        0x18,                   # Structure end
+      ]
+
+      obj = WithEnum.from_slice(bytes)
+      obj.message_type.should eq(MessageType::Reply)
+      obj.status.should eq(StatusCode::Error)
+    end
+
+    it "serializes enum to correct underlying type" do
+      bytes = Bytes[
+        0x15,                   # Structure start
+        0x25, 0x01, 0x10, 0x01, # Tag 1, UInt16 0x0110 (Inquiry)
+        0x24, 0x02, 0x02,       # Tag 2, UInt8 0x02 (Pending)
+        0x18,                   # Structure end
+      ]
+
+      obj = WithEnum.from_slice(bytes)
+      output = obj.to_slice
+      any = TLV::Any.from_slice(output)
+
+      # MessageType should be serialized as minimum encoding (UInt16 since 0x0110 doesn't fit in UInt8)
+      any[1_u8].header.element_type.should eq(TLV::ElementType::UnsignedInt16)
+      any[1_u8].as_u16.should eq(0x0110_u16)
+
+      # StatusCode (0x02) fits in UInt8, so minimum encoding
+      any[2_u8].header.element_type.should eq(TLV::ElementType::UnsignedInt8)
+      any[2_u8].as_u8.should eq(0x02_u8)
+    end
+
+    it "round-trips enum values" do
+      bytes = Bytes[
+        0x15,                   # Structure start
+        0x25, 0x01, 0x11, 0x01, # Tag 1, UInt16 0x0111 (Reply)
+        0x24, 0x02, 0x01,       # Tag 2, UInt8 0x01 (Error)
+        0x18,                   # Structure end
+      ]
+
+      obj = WithEnum.from_slice(bytes)
+      output = obj.to_slice
+      parsed = WithEnum.from_slice(output)
+
+      parsed.message_type.should eq(MessageType::Reply)
+      parsed.status.should eq(StatusCode::Error)
+    end
+
+    it "handles enum with other fields" do
+      bytes = Bytes[
+        0x15,                                     # Structure start
+        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00,       # Tag 1, UInt32 42
+        0x25, 0x02, 0x00, 0x01,                   # Tag 2, UInt16 0x0100 (Command)
+        0x2C, 0x03, 0x04, 0x54, 0x65, 0x73, 0x74, # Tag 3, String "Test"
+        0x18,                                     # Structure end
+      ]
+
+      obj = WithEnumAndData.from_slice(bytes)
+      obj.id.should eq(42_u32)
+      obj.type.should eq(MessageType::Command)
+      obj.name.should eq("Test")
+    end
+
+    it "round-trips enum with other fields" do
+      bytes = Bytes[
+        0x15,                                           # Structure start
+        0x26, 0x01, 0x64, 0x00, 0x00, 0x00,             # Tag 1, UInt32 100
+        0x25, 0x02, 0x10, 0x01,                         # Tag 2, UInt16 0x0110 (Inquiry)
+        0x2C, 0x03, 0x05, 0x48, 0x65, 0x6C, 0x6C, 0x6F, # Tag 3, String "Hello"
+        0x18,                                           # Structure end
+      ]
+
+      obj = WithEnumAndData.from_slice(bytes)
+      output = obj.to_slice
+      parsed = WithEnumAndData.from_slice(output)
+
+      parsed.id.should eq(100_u32)
+      parsed.type.should eq(MessageType::Inquiry)
+      parsed.name.should eq("Hello")
+    end
+
+    it "handles optional enum - present" do
+      bytes = Bytes[
+        0x15,                               # Structure start
+        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00, # Tag 1, UInt32 42
+        0x24, 0x02, 0x01,                   # Tag 2, UInt8 0x01 (Error)
+        0x18,                               # Structure end
+      ]
+
+      obj = WithOptionalEnum.from_slice(bytes)
+      obj.id.should eq(42_u32)
+      obj.status.should eq(StatusCode::Error)
+    end
+
+    it "handles optional enum - missing" do
+      bytes = Bytes[
+        0x15,                               # Structure start
+        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00, # Tag 1, UInt32 42
+        0x18,                               # Structure end
+      ]
+
+      obj = WithOptionalEnum.from_slice(bytes)
+      obj.id.should eq(42_u32)
+      obj.status.should be_nil
+    end
+
+    it "serializes nil optional enum correctly" do
+      bytes = Bytes[
+        0x15,                               # Structure start
+        0x26, 0x01, 0x2A, 0x00, 0x00, 0x00, # Tag 1, UInt32 42
+        0x18,                               # Structure end
+      ]
+
+      obj = WithOptionalEnum.from_slice(bytes)
+      output = obj.to_slice
+      parsed = WithOptionalEnum.from_slice(output)
+
+      parsed.id.should eq(42_u32)
+      parsed.status.should be_nil
+    end
+
+    it "handles signed enum types" do
+      # Priority::Low = -1, Priority::Normal = 0, Priority::High = 1
+      io = IO::Memory.new
+      io.write_bytes(0x15_u8, IO::ByteFormat::LittleEndian) # Structure start
+      io.write_bytes(0x20_u8, IO::ByteFormat::LittleEndian) # Context tag + SignedInt8
+      io.write_bytes(0x01_u8, IO::ByteFormat::LittleEndian) # Tag 1
+      io.write_bytes(-1_i8, IO::ByteFormat::LittleEndian)   # Value -1 (Low)
+      io.write_bytes(0x18_u8, IO::ByteFormat::LittleEndian) # Structure end
+
+      obj = WithSignedEnum.from_slice(io.to_slice)
+      obj.priority.should eq(Priority::Low)
+    end
+
+    it "round-trips signed enum" do
+      io = IO::Memory.new
+      io.write_bytes(0x15_u8, IO::ByteFormat::LittleEndian) # Structure start
+      io.write_bytes(0x20_u8, IO::ByteFormat::LittleEndian) # Context tag + SignedInt8
+      io.write_bytes(0x01_u8, IO::ByteFormat::LittleEndian) # Tag 1
+      io.write_bytes(1_i8, IO::ByteFormat::LittleEndian)    # Value 1 (High)
+      io.write_bytes(0x18_u8, IO::ByteFormat::LittleEndian) # Structure end
+
+      obj = WithSignedEnum.from_slice(io.to_slice)
+      output = obj.to_slice
+      parsed = WithSignedEnum.from_slice(output)
+
+      parsed.priority.should eq(Priority::High)
+    end
+
+    it "respects fixed_size annotation for enum" do
+      # Test that fixed_size: true preserves full encoding
+      bytes = Bytes[
+        0x15,             # Structure start
+        0x24, 0x01, 0x01, # Tag 1, UInt8 0x01 (but will re-encode as UInt16)
+        0x18,             # Structure end
+      ]
+
+      # Can't directly create WithFixedSizeEnum with value 0x01 from bytes since
+      # it's not a valid MessageType, so let's use a valid value
+      bytes_valid = Bytes[
+        0x15,                   # Structure start
+        0x25, 0x01, 0x00, 0x01, # Tag 1, UInt16 0x0100 (Command)
+        0x18,                   # Structure end
+      ]
+
+      obj = WithFixedSizeEnum.from_slice(bytes_valid)
+      output = obj.to_slice
+      any = TLV::Any.from_slice(output)
+
+      # With fixed_size: true, should always use UInt16 encoding
+      any[1_u8].header.element_type.should eq(TLV::ElementType::UnsignedInt16)
+    end
+
+    it "deserializes from IO using read_bytes" do
+      bytes = Bytes[
+        0x15,                   # Structure start
+        0x25, 0x01, 0x10, 0x01, # Tag 1, UInt16 0x0110 (Inquiry)
+        0x24, 0x02, 0x02,       # Tag 2, UInt8 0x02 (Pending)
+        0x18,                   # Structure end
+      ]
+
+      io = IO::Memory.new(bytes)
+      obj = io.read_bytes(WithEnum)
+      obj.message_type.should eq(MessageType::Inquiry)
+      obj.status.should eq(StatusCode::Pending)
+    end
+
+    it "handles enum | string union with enum value" do
+      bytes = Bytes[
+        0x15,                   # Structure start
+        0x25, 0x01, 0x00, 0x01, # Tag 1, UInt16 0x0100 (Command)
+        0x18,                   # Structure end
+      ]
+
+      obj = WithEnumOrString.from_slice(bytes)
+      obj.value.should eq(MessageType::Command)
+      obj.value.should be_a(MessageType)
+    end
+
+    it "handles enum | string union with string value" do
+      bytes = Bytes[
+        0x15,                                           # Structure start
+        0x2C, 0x01, 0x05, 0x48, 0x65, 0x6C, 0x6C, 0x6F, # Tag 1, String "Hello"
+        0x18,                                           # Structure end
+      ]
+
+      obj = WithEnumOrString.from_slice(bytes)
+      obj.value.should eq("Hello")
+      obj.value.should be_a(String)
+    end
+
+    it "round-trips enum | string union" do
+      # Test enum round-trip
+      bytes_enum = Bytes[
+        0x15,                   # Structure start
+        0x25, 0x01, 0x10, 0x01, # Tag 1, UInt16 0x0110 (Inquiry)
+        0x18,                   # Structure end
+      ]
+
+      obj1 = WithEnumOrString.from_slice(bytes_enum)
+      output1 = obj1.to_slice
+      parsed1 = WithEnumOrString.from_slice(output1)
+      parsed1.value.should eq(MessageType::Inquiry)
+
+      # Test string round-trip
+      bytes_str = Bytes[
+        0x15,                                           # Structure start
+        0x2C, 0x01, 0x05, 0x57, 0x6F, 0x72, 0x6C, 0x64, # Tag 1, String "World"
+        0x18,                                           # Structure end
+      ]
+
+      obj2 = WithEnumOrString.from_slice(bytes_str)
+      output2 = obj2.to_slice
+      parsed2 = WithEnumOrString.from_slice(output2)
+      parsed2.value.should eq("World")
     end
   end
 end

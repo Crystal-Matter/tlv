@@ -363,95 +363,133 @@ module TLV
       any
     end
 
-    # Handle Serializable types and union types (catch-all with macro check)
+    # Handle Serializable types, enum types, and union types (catch-all with macro check)
     def self.deserialize_value(any : TLV::Any, type : T.class) : T forall T
-      {% if T.union? %}
-        {% union_types = T.union_types %}
-        {% has_nil = union_types.any?(&.==(Nil)) %}
-        {% non_nil_types = union_types.reject(&.==(Nil)) %}
+      {% begin %}
+        {% if T < Enum %}
+          # Enum type - deserialize the integer value and convert to enum
+          # TLV integers are stored with minimum size encoding, so we need to handle all sizes
+          v = any.value
+          int_value = case v
+                      when Int8   then v.to_i64
+                      when Int16  then v.to_i64
+                      when Int32  then v.to_i64
+                      when Int64  then v
+                      when UInt8  then v.to_i64
+                      when UInt16 then v.to_i64
+                      when UInt32 then v.to_i64
+                      when UInt64 then v.to_i64!
+                      else
+                        raise "Cannot deserialize #{v.class} to enum #{T}"
+                      end
+          T.from_value(int_value)
+        {% elsif T.union? %}
+          {% union_types = T.union_types %}
+          {% has_nil = union_types.any?(&.==(Nil)) %}
+          {% non_nil_types = union_types.reject(&.==(Nil)) %}
 
-        # Handle null element type for nilable unions
-        {% if has_nil %}
-          if any.header.element_type.null?
-            return nil
-          end
-        {% end %}
-
-        # Try to match the TLV element type to one of the union types
-        # Note: TLV uses minimum-size encoding, so we need to handle integer widening
-        element_type = any.header.element_type
-        {% for ut in non_nil_types %}
-          {% if ut == Bool %}
-            if element_type.boolean_true? || element_type.boolean_false?
-              return any.as_bool
-            end
-          {% elsif ut == String %}
-            if element_type.utf8_string1? || element_type.utf8_string2? || element_type.utf8_string4? || element_type.utf8_string8?
-              return any.as_s
-            end
-          {% elsif ut == Bytes %}
-            if element_type.byte_string1? || element_type.byte_string2? || element_type.byte_string4? || element_type.byte_string8?
-              return any.as_bytes
-            end
-          {% elsif ut == Int8 %}
-            if element_type.signed_int8?
-              return any.as_i8
-            end
-          {% elsif ut == Int16 %}
-            # Accept Int8 or Int16 for Int16 target (widening)
-            if element_type.signed_int8? || element_type.signed_int16?
-              return any.as_i16
-            end
-          {% elsif ut == Int32 %}
-            # Accept Int8, Int16, or Int32 for Int32 target (widening)
-            if element_type.signed_int8? || element_type.signed_int16? || element_type.signed_int32?
-              return any.as_i32
-            end
-          {% elsif ut == Int64 %}
-            # Accept any signed int for Int64 target (widening)
-            if element_type.signed_int8? || element_type.signed_int16? || element_type.signed_int32? || element_type.signed_int64?
-              return any.as_i64
-            end
-          {% elsif ut == UInt8 %}
-            if element_type.unsigned_int8?
-              return any.as_u8
-            end
-          {% elsif ut == UInt16 %}
-            # Accept UInt8 or UInt16 for UInt16 target (widening)
-            if element_type.unsigned_int8? || element_type.unsigned_int16?
-              return any.as_u16
-            end
-          {% elsif ut == UInt32 %}
-            # Accept UInt8, UInt16, or UInt32 for UInt32 target (widening)
-            if element_type.unsigned_int8? || element_type.unsigned_int16? || element_type.unsigned_int32?
-              return any.as_u32
-            end
-          {% elsif ut == UInt64 %}
-            # Accept any unsigned int for UInt64 target (widening)
-            if element_type.unsigned_int8? || element_type.unsigned_int16? || element_type.unsigned_int32? || element_type.unsigned_int64?
-              return any.as_u64
-            end
-          {% elsif ut == Float32 %}
-            if element_type.float32?
-              return any.as_f32
-            end
-          {% elsif ut == Float64 %}
-            if element_type.float64?
-              return any.as_f64
-            end
-          {% elsif ut < ::TLV::Serializable %}
-            if element_type.structure?
-              return {{ ut }}.from_tlv(any)
+          # Handle null element type for nilable unions
+          {% if has_nil %}
+            if any.header.element_type.null?
+              return nil
             end
           {% end %}
-        {% end %}
 
-        # If no type matched, raise an error
-        raise "Cannot deserialize TLV element type #{element_type} to union type #{T}"
-      {% elsif T < ::TLV::Serializable %}
-        T.from_tlv(any)
-      {% else %}
-        raise "Unsupported type for TLV deserialization: #{T}"
+          # Try to match the TLV element type to one of the union types
+          # Note: TLV uses minimum-size encoding, so we need to handle integer widening
+          element_type = any.header.element_type
+          {% for ut in non_nil_types %}
+            {% if ut == Bool %}
+              if element_type.boolean_true? || element_type.boolean_false?
+                return any.as_bool
+              end
+            {% elsif ut == String %}
+              if element_type.utf8_string1? || element_type.utf8_string2? || element_type.utf8_string4? || element_type.utf8_string8?
+                return any.as_s
+              end
+            {% elsif ut == Bytes %}
+              if element_type.byte_string1? || element_type.byte_string2? || element_type.byte_string4? || element_type.byte_string8?
+                return any.as_bytes
+              end
+            {% elsif ut == Int8 %}
+              if element_type.signed_int8?
+                return any.as_i8
+              end
+            {% elsif ut == Int16 %}
+              # Accept Int8 or Int16 for Int16 target (widening)
+              if element_type.signed_int8? || element_type.signed_int16?
+                return any.as_i16
+              end
+            {% elsif ut == Int32 %}
+              # Accept Int8, Int16, or Int32 for Int32 target (widening)
+              if element_type.signed_int8? || element_type.signed_int16? || element_type.signed_int32?
+                return any.as_i32
+              end
+            {% elsif ut == Int64 %}
+              # Accept any signed int for Int64 target (widening)
+              if element_type.signed_int8? || element_type.signed_int16? || element_type.signed_int32? || element_type.signed_int64?
+                return any.as_i64
+              end
+            {% elsif ut == UInt8 %}
+              if element_type.unsigned_int8?
+                return any.as_u8
+              end
+            {% elsif ut == UInt16 %}
+              # Accept UInt8 or UInt16 for UInt16 target (widening)
+              if element_type.unsigned_int8? || element_type.unsigned_int16?
+                return any.as_u16
+              end
+            {% elsif ut == UInt32 %}
+              # Accept UInt8, UInt16, or UInt32 for UInt32 target (widening)
+              if element_type.unsigned_int8? || element_type.unsigned_int16? || element_type.unsigned_int32?
+                return any.as_u32
+              end
+            {% elsif ut == UInt64 %}
+              # Accept any unsigned int for UInt64 target (widening)
+              if element_type.unsigned_int8? || element_type.unsigned_int16? || element_type.unsigned_int32? || element_type.unsigned_int64?
+                return any.as_u64
+              end
+            {% elsif ut == Float32 %}
+              if element_type.float32?
+                return any.as_f32
+              end
+            {% elsif ut == Float64 %}
+              if element_type.float64?
+                return any.as_f64
+              end
+            {% elsif ut < ::TLV::Serializable %}
+              if element_type.structure?
+                return {{ ut }}.from_tlv(any)
+              end
+            {% elsif ut < Enum %}
+              # Enum types - check if the element is any integer type
+              if element_type.signed_int8? || element_type.signed_int16? || element_type.signed_int32? || element_type.signed_int64? ||
+                 element_type.unsigned_int8? || element_type.unsigned_int16? || element_type.unsigned_int32? || element_type.unsigned_int64?
+                v = any.value
+                int_value = case v
+                            when Int8   then v.to_i64
+                            when Int16  then v.to_i64
+                            when Int32  then v.to_i64
+                            when Int64  then v
+                            when UInt8  then v.to_i64
+                            when UInt16 then v.to_i64
+                            when UInt32 then v.to_i64
+                            when UInt64 then v.to_i64!
+                            else
+                              raise "Cannot deserialize #{v.class} to enum #{{{ ut }}}"
+                            end
+                return {{ ut }}.from_value(int_value)
+              end
+            {% end %}
+          {% end %}
+
+          # If no type matched, raise an error
+          raise "Cannot deserialize TLV element type #{element_type} to union type #{T}"
+        {% elsif T < ::TLV::Serializable %}
+          T.from_tlv(any)
+        {% else %}
+          raise "Unsupported type for TLV deserialization: #{T}"
+        {% end %}
       {% end %}
     end
 
@@ -568,12 +606,39 @@ module TLV
       TLV::Any.new(header, value.value)
     end
 
-    # Handle Serializable types (catch-all)
+    # Handle Serializable types, enum types, and union types (catch-all)
     def self.serialize_value(value : T, tag, fixed_size : Bool = false) : TLV::Any forall T
-      {% if T < ::TLV::Serializable %}
-        value.to_tlv(tag)
-      {% else %}
-        raise "Unsupported type for TLV serialization: #{T}"
+      {% begin %}
+        {% if T < Enum %}
+          # Enum type - serialize as the underlying integer type
+          serialize_value(value.value, tag, fixed_size)
+        {% elsif T.union? %}
+          # Union type - check runtime type and serialize accordingly
+          {% for ut in T.union_types %}
+            {% if ut == Nil %}
+              if value.nil?
+                return TLV::Any.new(nil, tag)
+              end
+            {% elsif ut < Enum %}
+              if value.is_a?({{ ut }})
+                return serialize_value(value.value, tag, fixed_size)
+              end
+            {% elsif ut < ::TLV::Serializable %}
+              if value.is_a?({{ ut }})
+                return value.to_tlv(tag)
+              end
+            {% else %}
+              if value.is_a?({{ ut }})
+                return serialize_value(value.as({{ ut }}), tag, fixed_size)
+              end
+            {% end %}
+          {% end %}
+          raise "Cannot serialize union value: #{value.class}"
+        {% elsif T < ::TLV::Serializable %}
+          value.to_tlv(tag)
+        {% else %}
+          raise "Unsupported type for TLV serialization: #{T}"
+        {% end %}
       {% end %}
     end
 

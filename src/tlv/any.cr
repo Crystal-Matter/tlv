@@ -232,20 +232,28 @@ module TLV
 
     # Access structure elements by tag
     def [](tag : TagId) : Any
-      value.as(Structure)[tag]
+      self[tag]? || raise KeyError.new("tag #{tag} not valid for #{@value.class}")
     end
 
     def []?(tag : TagId) : Any?
-      value.as?(Structure).try(&.[tag]?)
+      if tag.is_a?(UInt8)
+        value.as?(Structure).try(&.[tag]?) || value.as?(List).try(&.[tag.to_i]?)
+      else
+        value.as?(Structure).try(&.[tag]?)
+      end
     end
 
     # Access list/array elements by index
     def [](index : Int32) : Any
-      value.as(List)[index]
+      self[index]? || raise IndexError.new("index #{index} not valid for #{@value.class}")
     end
 
     def []?(index : Int32) : Any?
-      value.as?(List).try(&.[index]?)
+      if index >= 0 && index <= 255
+        value.as?(List).try(&.[index]?) || value.as?(Structure).try(&.[index.to_u8]?)
+      else
+        value.as?(List).try(&.[index]?)
+      end
     end
 
     # Get the raw value cast to specific types (with widening support)

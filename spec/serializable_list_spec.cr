@@ -52,10 +52,10 @@ class ListWithBooleans
   include TLV::Serializable
 
   @[TLV::Field(tag: 1)]
-  property enabled : Bool
+  property? enabled : Bool
 
   @[TLV::Field(tag: 2)]
-  property active : Bool
+  property? active : Bool
 end
 
 # Regular struct (not ListFormat) for testing nested combinations
@@ -314,8 +314,8 @@ describe "TLV::ListFormat annotation" do
       ]
 
       obj = ListWithBooleans.from_slice(bytes)
-      obj.enabled.should be_true
-      obj.active.should be_false
+      obj.enabled?.should be_true
+      obj.active?.should be_false
     end
 
     it "round-trips booleans in ListFormat" do
@@ -329,8 +329,8 @@ describe "TLV::ListFormat annotation" do
       obj = ListWithBooleans.from_slice(bytes)
       output = obj.to_slice
       parsed = ListWithBooleans.from_slice(output)
-      parsed.enabled.should be_false
-      parsed.active.should be_true
+      parsed.enabled?.should be_false
+      parsed.active?.should be_true
     end
   end
 

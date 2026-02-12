@@ -21,7 +21,7 @@ module TLV
     end
 
     def self.from_tlv(data : Bytes) : Any
-      from_slice(data : Bytes)
+      from_slice(data)
     end
 
     # Write TLV element to IO
@@ -257,32 +257,44 @@ module TLV
     end
 
     # Get the raw value cast to specific types (with widening support)
-    def as_i8 : Int8
-      value.as(Int8)
+    def as_i8? : Int8?
+      value.as?(Int8)
     end
 
-    def as_i16 : Int16
+    def as_i8 : Int8
+      as_i8? || raise_cast_error("Int8")
+    end
+
+    def as_i16? : Int16?
       v = value
       case v
       when Int8  then v.to_i16
       when Int16 then v
       else
-        raise TypeCastError.new("Can't cast #{v.class} to Int16")
+        nil
       end
     end
 
-    def as_i32 : Int32
+    def as_i16 : Int16
+      as_i16? || raise_cast_error("Int16")
+    end
+
+    def as_i32? : Int32?
       v = value
       case v
       when Int8  then v.to_i32
       when Int16 then v.to_i32
       when Int32 then v
       else
-        raise TypeCastError.new("Can't cast #{v.class} to Int32")
+        nil
       end
     end
 
-    def as_i64 : Int64
+    def as_i32 : Int32
+      as_i32? || raise_cast_error("Int32")
+    end
+
+    def as_i64? : Int64?
       v = value
       case v
       when Int8  then v.to_i64
@@ -290,36 +302,52 @@ module TLV
       when Int32 then v.to_i64
       when Int64 then v
       else
-        raise TypeCastError.new("Can't cast #{v.class} to Int64")
+        nil
       end
     end
 
-    def as_u8 : UInt8
-      value.as(UInt8)
+    def as_i64 : Int64
+      as_i64? || raise_cast_error("Int64")
     end
 
-    def as_u16 : UInt16
+    def as_u8? : UInt8?
+      value.as?(UInt8)
+    end
+
+    def as_u8 : UInt8
+      as_u8? || raise_cast_error("UInt8")
+    end
+
+    def as_u16? : UInt16?
       v = value
       case v
       when UInt8  then v.to_u16
       when UInt16 then v
       else
-        raise TypeCastError.new("Can't cast #{v.class} to UInt16")
+        nil
       end
     end
 
-    def as_u32 : UInt32
+    def as_u16 : UInt16
+      as_u16? || raise_cast_error("UInt16")
+    end
+
+    def as_u32? : UInt32?
       v = value
       case v
       when UInt8  then v.to_u32
       when UInt16 then v.to_u32
       when UInt32 then v
       else
-        raise TypeCastError.new("Can't cast #{v.class} to UInt32")
+        nil
       end
     end
 
-    def as_u64 : UInt64
+    def as_u32 : UInt32
+      as_u32? || raise_cast_error("UInt32")
+    end
+
+    def as_u64? : UInt64?
       v = value
       case v
       when UInt8  then v.to_u64
@@ -327,40 +355,84 @@ module TLV
       when UInt32 then v.to_u64
       when UInt64 then v
       else
-        raise TypeCastError.new("Can't cast #{v.class} to UInt64")
+        nil
       end
     end
 
+    def as_u64 : UInt64
+      as_u64? || raise_cast_error("UInt64")
+    end
+
+    def as_bool? : Bool?
+      value.as?(Bool)
+    end
+
     def as_bool : Bool
-      value.as(Bool)
+      casted = as_bool?
+      return casted unless casted.nil?
+      raise_cast_error("Bool")
+    end
+
+    def as_f32? : Float32?
+      value.as?(Float32)
     end
 
     def as_f32 : Float32
-      value.as(Float32)
+      as_f32? || raise_cast_error("Float32")
+    end
+
+    def as_f64? : Float64?
+      value.as?(Float64)
     end
 
     def as_f64 : Float64
-      value.as(Float64)
+      as_f64? || raise_cast_error("Float64")
+    end
+
+    def as_s? : String?
+      value.as?(String)
     end
 
     def as_s : String
-      value.as(String)
+      as_s? || raise_cast_error("String")
+    end
+
+    def as_bytes? : Bytes?
+      value.as?(Bytes)
     end
 
     def as_bytes : Bytes
-      value.as(Bytes)
+      as_bytes? || raise_cast_error("Bytes")
+    end
+
+    def as_nil? : Nil?
+      value.as?(Nil)
     end
 
     def as_nil : Nil
-      value.as(Nil)
+      return nil if value.nil?
+      raise_cast_error("Nil")
+    end
+
+    def as_list? : List?
+      value.as?(List)
     end
 
     def as_list : List
-      value.as(List)
+      as_list? || raise_cast_error("List")
+    end
+
+    def as_structure? : Structure?
+      value.as?(Structure)
     end
 
     def as_structure : Structure
-      value.as(Structure)
+      as_structure? || raise_cast_error("Structure")
+    end
+
+    private def raise_cast_error(type_name : String) : NoReturn
+      v = value
+      raise TypeCastError.new("Can't cast #{v.class} to #{type_name}")
     end
 
     # Check if this is a container

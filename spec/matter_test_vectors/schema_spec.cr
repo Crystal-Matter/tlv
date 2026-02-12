@@ -18,7 +18,7 @@ class SchemaTestObject1
   property field3 : UInt16
 
   @[TLV::Field(tag: 4)]
-  property field4 : Bool
+  property? field4 : Bool
 
   def initialize(@field2 : UInt16, @field3 : UInt16, @field4 : Bool)
   end
@@ -158,7 +158,7 @@ describe "TLV Schema (matter.js test vectors)" do
       obj = SchemaTestObject1.from_slice(bytes)
       obj.field2.should eq(1_u16)
       obj.field3.should eq(0_u16)
-      obj.field4.should eq(false)
+      obj.field4?.should eq(false)
     end
   end
 

@@ -620,4 +620,35 @@ describe TLV::Any do
       values.should eq([1_u8, 2_u8, 3_u8])
     end
   end
+
+  describe "nilable cast helpers" do
+    it "returns nil for mismatched types instead of raising" do
+      any = TLV::Any.new("hello")
+
+      any.as_u8?.should be_nil
+      any.as_bool?.should be_nil
+      any.as_structure?.should be_nil
+      any.as_s?.should eq("hello")
+    end
+
+    it "applies widening rules in nilable integer helpers" do
+      any_u8 = TLV::Any.new(42_u8)
+      any_u8.as_u16?.should eq(42_u16)
+      any_u8.as_u32?.should eq(42_u32)
+      any_u8.as_u64?.should eq(42_u64)
+
+      any_i8 = TLV::Any.new(-42_i8)
+      any_i8.as_i16?.should eq(-42_i16)
+      any_i8.as_i32?.should eq(-42_i32)
+      any_i8.as_i64?.should eq(-42_i64)
+    end
+
+    it "keeps raising helpers behavior for mismatched types" do
+      any = TLV::Any.new("hello")
+
+      expect_raises(TypeCastError) { any.as_u8 }
+      expect_raises(TypeCastError) { any.as_bool }
+      expect_raises(TypeCastError) { any.as_list }
+    end
+  end
 end

@@ -100,6 +100,46 @@ any.header.element_type # => TLV::ElementType::UnsignedInt16
 any.as_u16 # => 65521_u16
 ```
 
+## Custom field types
+
+A type that includes `TLV::Serializable` encodes as a structure. For a value that
+is a bare scalar on the wire, such as a wrapper around an identifier, register a
+pair of overloads instead and the type can then be used as a field, including as
+a nilable field or a member of a union.
+
+```crystal
+struct NodeId
+  getter id : UInt64
+
+  def initialize(@id : UInt64)
+  end
+
+  def to_tlv(outer_tag : TLV::TagId? = nil) : TLV::Any
+    TLV::Any.new(@id, outer_tag)
+  end
+
+  def self.from_tlv(any : TLV::Any) : NodeId
+    new(TLV::Serializable.deserialize_value(any, UInt64))
+  end
+end
+
+module TLV::Serializable
+  def self.serialize_value(value : NodeId, tag, fixed_size : Bool = false) : TLV::Any
+    value.to_tlv(tag)
+  end
+
+  def self.deserialize_value(any : TLV::Any, type : NodeId.class) : NodeId
+    type.from_tlv(any)
+  end
+end
+```
+
+## Errors
+
+Malformed input raises `TLV::DeserializationError`, carrying the structure and
+field it failed on. A value that cannot be written raises
+`TLV::SerializationError`, which is what an unregistered field type produces.
+
 ## Contributing
 
 1. Fork it (<https://github.com/spider-gazelle/tlv/fork>)

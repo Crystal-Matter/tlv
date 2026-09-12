@@ -5,6 +5,11 @@ module TLV
   class DeserializationError < Exception
   end
 
+  # Raised when a value cannot be written as TLV: a union holding a member the
+  # encoder does not know, or a type with no `serialize_value` overload.
+  class SerializationError < Exception
+  end
+
   enum Container
     Array
     List

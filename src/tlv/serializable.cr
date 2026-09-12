@@ -388,7 +388,7 @@ module TLV
                       when UInt32 then v.to_i64
                       when UInt64 then v.to_i64!
                       else
-                        raise "Cannot deserialize #{v.class} to enum #{T}"
+                        raise ::TLV::DeserializationError.new("Cannot deserialize #{v.class} to enum #{T}")
                       end
           T.from_value(int_value)
         {% elsif T.union? %}
@@ -487,7 +487,7 @@ module TLV
                             when UInt32 then v.to_i64
                             when UInt64 then v.to_i64!
                             else
-                              raise "Cannot deserialize #{v.class} to enum #{{{ ut }}}"
+                              raise ::TLV::DeserializationError.new("Cannot deserialize #{v.class} to enum #{{{ ut }}}")
                             end
                 return {{ ut }}.from_value(int_value)
               end
@@ -496,15 +496,27 @@ module TLV
               if element_type.array? || element_type.list?
                 return deserialize_value(any, {{ ut }})
               end
+            {% else %}
+              # Any other type: the program may have registered `serialize_value`
+              # and `deserialize_value` overloads for it (see the type-specific
+              # overloads above). Those are the only way to know whether this
+              # element belongs to this member, so try it and move on if it does
+              # not fit. Without this a custom type encodes as a field but cannot
+              # be decoded once the field is nilable.
+              begin
+                return deserialize_value(any, {{ ut }})
+              rescue ex : ::TLV::DeserializationError | TypeCastError
+                # Not this member of the union; try the next one.
+              end
             {% end %}
           {% end %}
 
           # If no type matched, raise an error
-          raise "Cannot deserialize TLV element type #{element_type} to union type #{T}"
+          raise ::TLV::DeserializationError.new("Cannot deserialize TLV element type #{element_type} to union type #{T}")
         {% elsif T < ::TLV::Serializable %}
           T.from_tlv(any)
         {% else %}
-          raise "Unsupported type for TLV deserialization: #{T}"
+          raise ::TLV::DeserializationError.new("Unsupported type for TLV deserialization: #{T}")
         {% end %}
       {% end %}
     end
@@ -649,11 +661,11 @@ module TLV
               end
             {% end %}
           {% end %}
-          raise "Cannot serialize union value: #{value.class}"
+          raise ::TLV::SerializationError.new("Cannot serialize union value: #{value.class}")
         {% elsif T < ::TLV::Serializable %}
           value.to_tlv(tag)
         {% else %}
-          raise "Unsupported type for TLV serialization: #{T}"
+          raise ::TLV::SerializationError.new("Unsupported type for TLV serialization: #{T}")
         {% end %}
       {% end %}
     end

@@ -93,7 +93,7 @@ module TLV
       in .list?
         read_list(io)
       in .end_of_container?
-        raise "Unexpected EndOfContainer"
+        raise ::TLV::DeserializationError.new("Unexpected EndOfContainer")
       end
     end
 
@@ -126,7 +126,7 @@ module TLV
         elsif tag.is_a?(Tuple(UInt16, UInt16, UInt16))
           result[tag] = Any.new(header, value)
         else
-          raise "Structure elements must have tags, got: #{tag.inspect}"
+          raise ::TLV::DeserializationError.new("Structure elements must have tags, got: #{tag.inspect}")
         end
       end
       result

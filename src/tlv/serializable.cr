@@ -82,6 +82,8 @@ module TLV
               {% if ann %}
                 {% tag = ann[:tag] %}
                 {% type = ivar.type %}
+                {% is_field_state = type.name.starts_with?("TLV::FieldState(") || type.name.starts_with?("::TLV::FieldState(") %}
+                {% field_type = type.type_vars.first if is_field_state %}
                 {% optional = ann[:optional] != false && ivar.type.nilable? %}
                 {% has_default = ivar.has_default_value? %}
                 {% is_tuple = type.name.starts_with?("Tuple(") || (type.union? && type.union_types.any?(&.name.starts_with?("Tuple("))) %}
@@ -99,7 +101,22 @@ module TLV
 
                 %found{ivar.name} = %structure[{{ lookup_key }}]?
 
-                {% if optional %}
+                {% if is_field_state %}
+                  if %found{ivar.name}
+                    if %found{ivar.name}.header.element_type.null?
+                      @{{ ivar.name }} = ::TLV::FieldState({{ field_type.id }}).null
+                    else
+                      @{{ ivar.name }} = ::TLV::FieldState({{ field_type.id }}).value(
+                        ::TLV::Serializable.deserialize_field(
+                          %found{ivar.name}, {{ field_type.id }}, {{ @type.stringify }},
+                          {{ ivar.name.stringify }}, {{ lookup_key.stringify }}
+                        )
+                      )
+                    end
+                  else
+                    @{{ ivar.name }} = ::TLV::FieldState({{ field_type.id }}).absent
+                  end
+                {% elsif optional %}
                   if %found{ivar.name}
                     {% if is_tuple %}
                       @{{ ivar.name }} = ::TLV::Serializable.deserialize_tuple_field(
@@ -191,6 +208,8 @@ module TLV
               {% if ann %}
                 {% tag = ann[:tag] %}
                 {% type = ivar.type %}
+                {% is_field_state = type.name.starts_with?("TLV::FieldState(") || type.name.starts_with?("::TLV::FieldState(") %}
+                {% field_type = type.type_vars.first if is_field_state %}
                 {% optional = ann[:optional] != false && ivar.type.nilable? %}
                 {% container = ann[:container] %}
                 {% fixed_size = ann[:fixed_size] == true %}
@@ -208,7 +227,26 @@ module TLV
 
                 %value{ivar.name} = @{{ ivar.name }}
 
-                {% if optional %}
+                {% if is_field_state %}
+                  unless %value{ivar.name}.absent?
+                    %field{ivar.name} = if %value{ivar.name}.null?
+                                           TLV::Any.new(nil, {{ tag_value }})
+                                         else
+                                           {% if field_type.name.starts_with?("Tuple(") %}
+                                             ::TLV::Serializable.serialize_tuple(%value{ivar.name}.value!, {{ field_type.id }}, {{ tag_value }}, {{ container == :array }})
+                                           {% elsif field_type.name.starts_with?("Array(") && container == :list %}
+                                             ::TLV::Serializable.serialize_array_as_list(%value{ivar.name}.value!, {{ tag_value }})
+                                           {% else %}
+                                             ::TLV::Serializable.serialize_value(%value{ivar.name}.value!, {{ tag_value }}, {{ fixed_size }})
+                                           {% end %}
+                                         end
+                    {% if is_list_format %}
+                      %list << %field{ivar.name}
+                    {% else %}
+                      %structure[{{ tag_value }}] = %field{ivar.name}
+                    {% end %}
+                  end
+                {% elsif optional %}
                   unless %value{ivar.name}.nil?
                     {% if is_tuple %}
                       # Tuple: default to list, use array if container: :array

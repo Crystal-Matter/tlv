@@ -100,6 +100,42 @@ any.header.element_type # => TLV::ElementType::UnsignedInt16
 any.as_u16 # => 65521_u16
 ```
 
+## Optional fields with explicit Null
+
+For a field where an omitted tag and a TLV Null have different meanings, use
+`TLV::FieldState(T)`. Existing `T?` fields retain their current behavior: nil
+omits the tag by default, while `optional: false` writes Null.
+
+```crystal
+struct StreamRequest
+  include TLV::Serializable
+
+  @[TLV::Field(tag: 0)]
+  getter stream_id : TLV::FieldState(UInt16)
+
+  def initialize(@stream_id : TLV::FieldState(UInt16)); end
+end
+
+StreamRequest.new(TLV::FieldState(UInt16).absent)       # no tag 0: no stream requested
+StreamRequest.new(TLV::FieldState(UInt16).null)         # tag 0 = Null: auto-assign
+StreamRequest.new(TLV::FieldState(UInt16).value(5_u16)) # tag 0 = 5: explicit stream
+
+decoded = StreamRequest.from_slice(bytes)
+if decoded.stream_id.absent?
+  # no stream requested
+elsif decoded.stream_id.null?
+  # auto-assign a stream
+else
+  decoded.stream_id.value! # explicit stream
+end
+```
+
+`FieldState` works for scalar, list, and struct fields; malformed non-Null
+values are rejected using the ordinary typed deserializer. An application that
+persists its decoded request can save `kind` and the typed `value` in its own
+record, then reconstruct `FieldState` when generating a response. The TLV
+library does not define an application storage format.
+
 ## Custom field types
 
 A type that includes `TLV::Serializable` encodes as a structure. For a value that

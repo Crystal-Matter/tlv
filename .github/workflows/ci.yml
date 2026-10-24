@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: crystal-lang/install-crystal@v1
+        with:
+          crystal: 1.22.0
+      - run: shards install
+      - run: crystal tool format --check
+      - run: crystal spec -v --error-trace

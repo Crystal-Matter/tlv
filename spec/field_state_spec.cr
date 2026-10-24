@@ -38,7 +38,29 @@ private struct FieldStateContainers
   def initialize(@ids : TLV::FieldState(Array(UInt8)), @child : TLV::FieldState(FieldStateChild)); end
 end
 
+private struct MandatoryFieldStateEnvelope
+  include TLV::Serializable
+
+  @[TLV::Field(tag: 0, optional: false)]
+  getter stream_id : TLV::FieldState(UInt16)
+
+  def initialize(@stream_id : TLV::FieldState(UInt16)); end
+end
+
 describe TLV::FieldState do
+  it "requires presence when a nullable field is marked mandatory" do
+    expect_raises(TLV::SerializationError) do
+      MandatoryFieldStateEnvelope.new(TLV::FieldState(UInt16).absent).to_slice
+    end
+    expect_raises(TLV::DeserializationError) do
+      MandatoryFieldStateEnvelope.from_tlv(TLV::Any.new(TLV::Structure.new))
+    end
+    null_value = MandatoryFieldStateEnvelope.new(TLV::FieldState(UInt16).null)
+    MandatoryFieldStateEnvelope.from_slice(null_value.to_slice).stream_id.null?.should be_true
+    concrete = MandatoryFieldStateEnvelope.new(TLV::FieldState(UInt16).value(7_u16))
+    MandatoryFieldStateEnvelope.from_slice(concrete.to_slice).stream_id.value!.should eq(7_u16)
+  end
+
   it "round trips an absent optional field without adding a TLV tag" do
     value = FieldStateEnvelope.new(1_u8, TLV::FieldState(UInt16).absent,
       TLV::FieldState(Array(UInt16)).absent)

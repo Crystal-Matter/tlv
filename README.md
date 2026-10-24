@@ -131,7 +131,10 @@ end
 ```
 
 `FieldState` works for scalar, list, and struct fields; malformed non-Null
-values are rejected using the ordinary typed deserializer. An application that
+values are rejected using the ordinary typed deserializer. Add
+`optional: false` to require the tag while still allowing explicit Null:
+decoding a missing tag raises `TLV::DeserializationError`, and encoding
+`FieldState.absent` raises `TLV::SerializationError`. An application that
 persists its decoded request can save `kind` and the typed `value` in its own
 record, then reconstruct `FieldState` when generating a response. The TLV
 library does not define an application storage format.

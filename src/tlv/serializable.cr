@@ -114,7 +114,13 @@ module TLV
                       )
                     end
                   else
-                    @{{ ivar.name }} = ::TLV::FieldState({{ field_type.id }}).absent
+                    {% if ann[:optional] == false %}
+                      raise ::TLV::DeserializationError.new(
+                        "Missing mandatory TLV field {{ ivar.name }} (tag {{ tag }}) in {{ @type }}"
+                      )
+                    {% else %}
+                      @{{ ivar.name }} = ::TLV::FieldState({{ field_type.id }}).absent
+                    {% end %}
                   end
                 {% elsif optional %}
                   if %found{ivar.name}
@@ -228,6 +234,13 @@ module TLV
                 %value{ivar.name} = @{{ ivar.name }}
 
                 {% if is_field_state %}
+                  {% if ann[:optional] == false %}
+                    if %value{ivar.name}.absent?
+                      raise ::TLV::SerializationError.new(
+                        "Cannot serialize absent mandatory TLV field {{ ivar.name }} (tag {{ tag }}) in {{ @type }}"
+                      )
+                    end
+                  {% end %}
                   unless %value{ivar.name}.absent?
                     %field{ivar.name} = if %value{ivar.name}.null?
                                            TLV::Any.new(nil, {{ tag_value }})
